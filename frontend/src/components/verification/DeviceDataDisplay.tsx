@@ -109,7 +109,8 @@ export function DeviceDataDisplay() {
     setRefreshing(true);
     setNoNewDataMessage(""); // Clear any previous message
     try {
-      const newData = await imeiApi.getLiveDeviceData(currentImei);
+      const response = await imeiApi.getLiveDeviceData(currentImei);
+      const newData = response.data as LiveDeviceData;
 
       // Check if the new data is valid
       if (!isValidDeviceData(newData)) {

@@ -124,7 +124,7 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
       let results: SearchableEntity[] = [];
 
       if (entityType === EntityType.Technician) {
-        const response = await technicianApi.getAll({ search: searchQuery, pageSize: 20 });
+        const response = await technicianApi.getAll({ searchTerm: searchQuery, pageSize: 20 });
         const technicians = response.data.items || response.data || [];
         results = technicians.map((t: { technicianId: number; fullName?: string; username?: string; employeeCode?: string }) => ({
           id: t.technicianId,
@@ -132,7 +132,7 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
           subText: t.employeeCode || undefined,
         }));
       } else if (entityType === EntityType.Reseller) {
-        const response = await resellerApi.getAll({ search: searchQuery, pageSize: 20 });
+        const response = await resellerApi.getAll({ searchTerm: searchQuery, pageSize: 20 });
         const resellers = response.data.items || response.data || [];
         results = resellers.map((r: { resellerId: number; companyName: string; displayName?: string }) => ({
           id: r.resellerId,

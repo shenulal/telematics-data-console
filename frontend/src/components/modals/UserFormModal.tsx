@@ -215,22 +215,34 @@ export function UserFormModal({ open, user, onClose }: Props) {
 
     setLoading(true);
     try {
-      const payload = {
-        username: formData.username,
-        email: formData.email,
-        password: formData.password || undefined,
-        fullName: formData.fullName || undefined,
-        mobile: formData.mobile || undefined,
-        resellerId: formData.resellerId ? parseInt(formData.resellerId) : undefined,
-        roles: formData.roles,
-        status: parseInt(formData.status),
-        lockoutUntil: formData.status === USER_STATUS.LOCKED.toString() ? formData.lockoutUntil : undefined,
-      };
-
       if (user) {
-        await userApi.update(user.userId, payload);
+        // Update existing user
+        const updatePayload = {
+          username: formData.username,
+          email: formData.email,
+          password: formData.password || undefined,
+          fullName: formData.fullName || undefined,
+          mobile: formData.mobile || undefined,
+          resellerId: formData.resellerId ? parseInt(formData.resellerId) : undefined,
+          roles: formData.roles,
+          status: parseInt(formData.status),
+          lockoutUntil: formData.status === USER_STATUS.LOCKED.toString() ? formData.lockoutUntil : undefined,
+        };
+        await userApi.update(user.userId, updatePayload);
       } else {
-        await userApi.create(payload);
+        // Create new user - password is required
+        const createPayload = {
+          username: formData.username,
+          email: formData.email,
+          password: formData.password!, // Required for create
+          fullName: formData.fullName || undefined,
+          mobile: formData.mobile || undefined,
+          resellerId: formData.resellerId ? parseInt(formData.resellerId) : undefined,
+          roles: formData.roles,
+          status: parseInt(formData.status),
+          lockoutUntil: formData.status === USER_STATUS.LOCKED.toString() ? formData.lockoutUntil : undefined,
+        };
+        await userApi.create(createPayload);
       }
       onClose(true);
     } catch (error) {
