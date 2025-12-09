@@ -127,14 +127,24 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline
-if (app.Environment.IsDevelopment())
+
+// Support for running as a sub-application in IIS (e.g., /TelematicsDataConsole.API)
+var pathBase = app.Configuration["PathBase"];
+if (!string.IsNullOrEmpty(pathBase))
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UsePathBase(pathBase);
 }
-else
+
+// Enable Swagger in all environments for API testing
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    // Only use HTTPS redirection in production
+    c.SwaggerEndpoint("swagger/v1/swagger.json", "Telematics Data Console API v1");
+    c.RoutePrefix = string.Empty; // Serve Swagger UI at the app root
+});
+
+if (!app.Environment.IsDevelopment())
+{
     app.UseHttpsRedirection();
 }
 
