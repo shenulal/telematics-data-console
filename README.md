@@ -141,6 +141,60 @@ The API follows RESTful conventions. Key endpoints:
 - `GET /api/technicians` - List technicians
 - `GET /api/resellers` - List resellers
 
+## Deployment
+
+### Frontend (Netlify)
+
+1. Push your code to GitHub
+2. Connect your repository to Netlify
+3. Configure build settings:
+   - **Build command**: `npm run build`
+   - **Publish directory**: `.next`
+   - **Base directory**: `frontend`
+4. Add environment variables in Netlify Dashboard:
+   - `NEXT_PUBLIC_API_URL`: Your backend API URL (e.g., `https://your-api.azurewebsites.net/api`)
+
+### Backend (Azure App Service, Railway, or Render)
+
+Since Netlify doesn't support .NET, deploy the backend separately:
+
+#### Option 1: Azure App Service
+1. Create an Azure App Service (Windows or Linux)
+2. Deploy using Visual Studio, VS Code, or Azure CLI:
+   ```bash
+   cd backend/TelematicsDataConsole.API
+   dotnet publish -c Release
+   az webapp deploy --resource-group <group> --name <app-name> --src-path bin/Release/net8.0/publish
+   ```
+3. Configure connection strings in Azure Portal > Configuration
+
+#### Option 2: Railway
+1. Connect your GitHub repository
+2. Set the root directory to `backend/TelematicsDataConsole.API`
+3. Railway auto-detects .NET projects
+4. Add environment variables for connection strings
+
+#### Option 3: Render
+1. Create a new Web Service
+2. Connect your GitHub repository
+3. Set build command: `dotnet publish -c Release -o out`
+4. Set start command: `dotnet out/TelematicsDataConsole.API.dll`
+
+### CORS Configuration
+
+After deploying, update `appsettings.json` or environment variables to include your Netlify domain:
+
+```json
+{
+  "Cors": {
+    "AllowedOrigins": [
+      "https://your-app.netlify.app",
+      "http://localhost:3000"
+    ]
+  }
+}
+```
+
 ## License
 
 MIT License
