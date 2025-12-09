@@ -1,0 +1,407 @@
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using TelematicsDataConsole.Core.DTOs.Imei;
+using TelematicsDataConsole.Core.Entities;
+using TelematicsDataConsole.Core.Interfaces.Services;
+using TelematicsDataConsole.Infrastructure.Data;
+
+namespace TelematicsDataConsole.Infrastructure.Services;
+
+public class ImeiService : IImeiService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly IAuditService _auditService;
+    private readonly IGpsDataProvider _gpsDataProvider;
+
+    public ImeiService(ApplicationDbContext context, IAuditService auditService, IGpsDataProvider gpsDataProvider)
+    {
+        _context = context;
+        _auditService = auditService;
+        _gpsDataProvider = gpsDataProvider;
+    }
+
+    public async Task<ImeiAccessResult> CheckAccessAsync(int technicianId, string imei)
+    {
+        var technician = await _context.Technicians
+            .Include(t => t.ImeiRestrictions)
+                .ThenInclude(r => r.Tag)
+                    .ThenInclude(t => t!.TagItems)
+            .FirstOrDefaultAsync(t => t.TechnicianId == technicianId);
+
+        if (technician == null)
+        {
+            return new ImeiAccessResult { HasAccess = false, Message = "Technician not found" };
+        }
+
+        if (technician.Status != (short)TechnicianStatus.Active)
+        {
+            return new ImeiAccessResult { HasAccess = false, Message = "Technician account is not active" };
+        }
+
+        // Get device ID from IMEI (this would come from your GPS data source)
+        var deviceId = await _gpsDataProvider.GetDeviceIdByImeiAsync(imei);
+        if (deviceId == null)
+        {
+            return new ImeiAccessResult { HasAccess = false, Message = "Device not found" };
+        }
+
+        // Check daily limit
+        var todayVerifications = await _context.VerificationLogs
+            .CountAsync(v => v.TechnicianId == technicianId && v.VerifiedAt.Date == DateTime.UtcNow.Date);
+
+        if (technician.DailyLimit > 0 && todayVerifications >= technician.DailyLimit)
+        {
+            return new ImeiAccessResult { HasAccess = false, Message = "Daily verification limit reached" };
+        }
+
+        // Check IMEI restrictions based on mode
+        var hasAccess = await CheckImeiRestrictions(technician, deviceId.Value);
+
+        if (!hasAccess)
+        {
+            await _auditService.LogAsync(technician.UserId, AuditActions.ImeiAccessDenied, "Device", imei);
+            return new ImeiAccessResult
+            {
+                HasAccess = false,
+                Message = "Restricted Access – You are not authorized to view data for this IMEI.",
+                RestrictionReason = "IMEI is restricted for this technician"
+            };
+        }
+
+        return new ImeiAccessResult { HasAccess = true, DeviceId = deviceId };
+    }
+
+    private async Task<bool> CheckImeiRestrictions(Technician technician, int deviceId)
+    {
+        var now = DateTime.UtcNow;
+        var activeRestrictions = technician.ImeiRestrictions
+            .Where(r => r.Status == (int)RestrictionStatus.Active &&
+                       (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
+            .ToList();
+
+        if (!activeRestrictions.Any())
+        {
+            // No restrictions - allow access to any IMEI
+            return true;
+        }
+
+        // Determine restriction mode based on the types of restrictions present
+        // If technician has ANY Allow restrictions, they operate in AllowList mode (deny by default)
+        // If technician has ONLY Deny restrictions, they operate in DenyList mode (allow by default)
+        bool hasAllowRestrictions = activeRestrictions.Any(r => r.AccessType == (short)AccessType.Allow);
+        bool hasDenyRestrictions = activeRestrictions.Any(r => r.AccessType == (short)AccessType.Deny);
+
+        // Check direct device restrictions first (highest priority)
+        var directRestriction = activeRestrictions.FirstOrDefault(r => r.DeviceId == deviceId);
+        if (directRestriction != null)
+        {
+            return directRestriction.AccessType == (short)AccessType.Allow;
+        }
+
+        // Check tag-based restrictions
+        foreach (var restriction in activeRestrictions.Where(r => r.TagId != null))
+        {
+            // Get device IDs from tag items (EntityType 1 = Device)
+            var tagDevices = restriction.Tag?.TagItems
+                .Where(ti => ti.EntityType == (short)TagEntityType.Device)
+                .Select(ti => ti.EntityId)
+                .ToList() ?? new List<long>();
+            if (tagDevices.Contains(deviceId))
+            {
+                return restriction.AccessType == (short)AccessType.Allow;
+            }
+        }
+
+        // Device not found in any restriction - apply default based on derived mode
+        // If has Allow restrictions (allow-list mode): deny by default (device not in allow list)
+        // If only Deny restrictions (deny-list mode): allow by default (device not in deny list)
+        if (hasAllowRestrictions)
+        {
+            return false; // Allow-list mode: deny devices not in the list
+        }
+        else if (hasDenyRestrictions)
+        {
+            return true; // Deny-list mode: allow devices not in the list
+        }
+
+        // Fallback: allow
+        return true;
+    }
+
+    public async Task<ImeiDataResult> GetDeviceDataAsync(int technicianId, string imei)
+    {
+        var accessResult = await CheckAccessAsync(technicianId, imei);
+        if (!accessResult.HasAccess)
+        {
+            return new ImeiDataResult { Success = false, Message = accessResult.Message };
+        }
+
+        var deviceData = await _gpsDataProvider.GetDeviceDataAsync(imei);
+        if (deviceData == null)
+        {
+            return new ImeiDataResult { Success = false, Message = "Unable to fetch device data" };
+        }
+
+        await _auditService.LogAsync(null, AuditActions.ImeiAccess, "Device", imei);
+
+        return new ImeiDataResult { Success = true, Data = deviceData };
+    }
+
+    public async Task<VerificationResult> VerifyDeviceAsync(int technicianId, VerificationRequest request)
+    {
+        var accessResult = await CheckAccessAsync(technicianId, request.Imei);
+        if (!accessResult.HasAccess)
+        {
+            return new VerificationResult { Success = false, Message = accessResult.Message };
+        }
+
+        var deviceId = accessResult.DeviceId ?? 0;
+        var timeGapThreshold = DateTime.UtcNow.AddHours(-VerificationLog.TIME_GAP_HOURS);
+
+        // Check if there's a recent verification for same technician and device
+        var existingLog = await _context.VerificationLogs
+            .Where(v => v.TechnicianId == technicianId
+                     && v.DeviceId == deviceId
+                     && v.VerifiedAt >= timeGapThreshold)
+            .OrderByDescending(v => v.VerifiedAt)
+            .FirstOrDefaultAsync();
+
+        if (existingLog != null)
+        {
+            // Return existing log without creating a new one
+            return new VerificationResult { Success = true, VerificationId = existingLog.VerificationId };
+        }
+
+        var log = new VerificationLog
+        {
+            TechnicianId = technicianId,
+            DeviceId = deviceId,
+            VerifiedAt = DateTime.UtcNow
+        };
+
+        await _context.VerificationLogs.AddAsync(log);
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(null, AuditActions.ImeiVerification, "VerificationLog", log.VerificationId.ToString());
+
+        return new VerificationResult { Success = true, VerificationId = log.VerificationId };
+    }
+
+    public async Task<IEnumerable<VerificationHistoryDto>> GetVerificationHistoryAsync(int technicianId, int? days = 30)
+    {
+        var fromDate = DateTime.UtcNow.AddDays(-(days ?? 30));
+        return await _context.VerificationLogs
+            .Where(v => v.TechnicianId == technicianId && v.VerifiedAt >= fromDate)
+            .OrderByDescending(v => v.VerifiedAt)
+            .Select(v => new VerificationHistoryDto
+            {
+                VerificationId = v.VerificationId,
+                DeviceId = v.DeviceId,
+                VerifiedAt = v.VerifiedAt
+            }).ToListAsync();
+    }
+
+    /// <summary>
+    /// Check access for Admin users (Super Admin, Reseller Admin, Supervisor)
+    /// Super Admin: Can access any IMEI
+    /// Reseller Admin/Supervisor: Can access cumulative set of IMEIs from their technicians' restrictions
+    ///                            If no restrictions exist, can access any IMEI
+    /// </summary>
+    public async Task<ImeiAccessResult> CheckAdminAccessAsync(int userId, int? resellerId, string imei)
+    {
+        // Get device ID from IMEI
+        var deviceId = await _gpsDataProvider.GetDeviceIdByImeiAsync(imei);
+        if (deviceId == null)
+        {
+            return new ImeiAccessResult { HasAccess = false, Message = "Device not found" };
+        }
+
+        // If no reseller ID (Super Admin), allow access to any IMEI
+        if (!resellerId.HasValue)
+        {
+            return new ImeiAccessResult { HasAccess = true, DeviceId = deviceId };
+        }
+
+        // For Reseller Admin/Supervisor, check cumulative IMEI restrictions from their technicians
+        var hasAccess = await CheckCumulativeResellerAccess(resellerId.Value, deviceId.Value);
+
+        if (!hasAccess)
+        {
+            await _auditService.LogAsync(userId, AuditActions.ImeiAccessDenied, "Device", imei);
+            return new ImeiAccessResult
+            {
+                HasAccess = false,
+                Message = "Restricted Access – This IMEI is not in your technicians' allowed list.",
+                RestrictionReason = "IMEI not found in any technician's allowed restrictions"
+            };
+        }
+
+        return new ImeiAccessResult { HasAccess = true, DeviceId = deviceId };
+    }
+
+    /// <summary>
+    /// Check if a device is accessible based on cumulative restrictions of all technicians under a reseller
+    /// Logic:
+    /// - If any technician has no restrictions, allow any IMEI
+    /// - Otherwise, collect all allowed devices from all technicians and check if the device is in the list
+    /// </summary>
+    private async Task<bool> CheckCumulativeResellerAccess(int resellerId, int deviceId)
+    {
+        var now = DateTime.UtcNow;
+
+        // Get all technicians under this reseller
+        var technicians = await _context.Technicians
+            .Include(t => t.ImeiRestrictions)
+                .ThenInclude(r => r.Tag)
+                    .ThenInclude(t => t!.TagItems)
+            .Where(t => t.ResellerId == resellerId && t.Status == (short)TechnicianStatus.Active)
+            .ToListAsync();
+
+        if (!technicians.Any())
+        {
+            // No technicians under this reseller - allow access
+            return true;
+        }
+
+        // Collect all allowed device IDs and denied device IDs from all technicians' restrictions
+        var allAllowedDevices = new HashSet<int>();
+        var allDeniedDevices = new HashSet<int>();
+        bool hasAnyRestrictions = false;
+        bool hasAnyAllowRestrictions = false;
+
+        foreach (var technician in technicians)
+        {
+            var activeRestrictions = technician.ImeiRestrictions
+                .Where(r => r.Status == (int)RestrictionStatus.Active &&
+                           (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
+                .ToList();
+
+            if (!activeRestrictions.Any())
+            {
+                // This technician has no restrictions - they can access any IMEI
+                // So the admin can also access any IMEI
+                return true;
+            }
+
+            hasAnyRestrictions = true;
+
+            // Collect devices from this technician's restrictions
+            foreach (var restriction in activeRestrictions)
+            {
+                var isAllow = restriction.AccessType == (short)AccessType.Allow;
+                if (isAllow) hasAnyAllowRestrictions = true;
+
+                // Direct device restriction
+                if (restriction.DeviceId.HasValue)
+                {
+                    if (isAllow)
+                        allAllowedDevices.Add(restriction.DeviceId.Value);
+                    else
+                        allDeniedDevices.Add(restriction.DeviceId.Value);
+                }
+
+                // Tag-based restriction
+                if (restriction.TagId != null && restriction.Tag != null)
+                {
+                    var tagDevices = restriction.Tag.TagItems
+                        .Where(ti => ti.EntityType == (short)TagEntityType.Device)
+                        .Select(ti => (int)ti.EntityId);
+                    foreach (var device in tagDevices)
+                    {
+                        if (isAllow)
+                            allAllowedDevices.Add(device);
+                        else
+                            allDeniedDevices.Add(device);
+                    }
+                }
+            }
+        }
+
+        // If no active restrictions at all, allow access
+        if (!hasAnyRestrictions)
+        {
+            return true;
+        }
+
+        // If there are Allow restrictions, device must be in the allowed list
+        if (hasAnyAllowRestrictions)
+        {
+            return allAllowedDevices.Contains(deviceId);
+        }
+
+        // If only Deny restrictions, device must NOT be in the denied list
+        return !allDeniedDevices.Contains(deviceId);
+    }
+
+    public async Task<ImeiDataResult> GetDeviceDataForAdminAsync(int userId, int? resellerId, string imei)
+    {
+        var accessResult = await CheckAdminAccessAsync(userId, resellerId, imei);
+        if (!accessResult.HasAccess)
+        {
+            return new ImeiDataResult { Success = false, Message = accessResult.Message };
+        }
+
+        var deviceData = await _gpsDataProvider.GetDeviceDataAsync(imei);
+        if (deviceData == null)
+        {
+            return new ImeiDataResult { Success = false, Message = "Unable to fetch device data" };
+        }
+
+        await _auditService.LogAsync(userId, AuditActions.ImeiAccess, "Device", imei);
+
+        return new ImeiDataResult { Success = true, Data = deviceData };
+    }
+
+    public async Task<VerificationResult> VerifyDeviceForAdminAsync(int userId, int? resellerId, VerificationRequest request)
+    {
+        var accessResult = await CheckAdminAccessAsync(userId, resellerId, request.Imei);
+        if (!accessResult.HasAccess)
+        {
+            return new VerificationResult { Success = false, Message = accessResult.Message };
+        }
+
+        var deviceId = accessResult.DeviceId ?? 0;
+        var timeGapThreshold = DateTime.UtcNow.AddHours(-VerificationLog.TIME_GAP_HOURS);
+
+        // For admin verifications, we use userId as a pseudo-TechnicianId (stored as negative to distinguish)
+        // Or we can create a separate log without TechnicianId
+        // For now, we'll log it with a special indicator - using 0 as TechnicianId for admin verifications
+
+        // Check if there's a recent verification for same device by this admin user
+        var existingLog = await _context.VerificationLogs
+            .Where(v => v.DeviceId == deviceId && v.VerifiedAt >= timeGapThreshold)
+            .OrderByDescending(v => v.VerifiedAt)
+            .FirstOrDefaultAsync();
+
+        if (existingLog != null)
+        {
+            // Return existing log without creating a new one
+            return new VerificationResult { Success = true, VerificationId = existingLog.VerificationId };
+        }
+
+        // For admin verifications, we need to handle the case where TechnicianId is required
+        // We'll create a verification log with TechnicianId = 0 to indicate admin verification
+        // Alternatively, we could make TechnicianId nullable - for now we'll use a workaround
+        var log = new VerificationLog
+        {
+            TechnicianId = 0, // 0 indicates admin verification
+            DeviceId = deviceId,
+            VerifiedAt = DateTime.UtcNow
+        };
+
+        await _context.VerificationLogs.AddAsync(log);
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(userId, AuditActions.ImeiVerification, "VerificationLog", log.VerificationId.ToString());
+
+        return new VerificationResult { Success = true, VerificationId = log.VerificationId };
+    }
+}
+
+// Interface for GPS data provider (to be implemented based on your GPS data source)
+public interface IGpsDataProvider
+{
+    Task<int?> GetDeviceIdByImeiAsync(string imei);
+    Task<DeviceDataDto?> GetDeviceDataAsync(string imei);
+}
+
