@@ -105,7 +105,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
             )}
 
             <div>
-              <Label htmlFor="currentPassword">Current Password *</Label>
+              <Label htmlFor="currentPassword" className="text-gray-700">Current Password *</Label>
               <div className="relative">
                 <Input
                   id="currentPassword"
@@ -125,7 +125,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
             </div>
 
             <div>
-              <Label htmlFor="newPassword">New Password * (min 8 characters)</Label>
+              <Label htmlFor="newPassword" className="text-gray-700">New Password * (min 8 characters)</Label>
               <div className="relative">
                 <Input
                   id="newPassword"
@@ -145,7 +145,7 @@ export function ChangePasswordModal({ open, onClose }: ChangePasswordModalProps)
             </div>
 
             <div>
-              <Label htmlFor="confirmPassword">Confirm New Password *</Label>
+              <Label htmlFor="confirmPassword" className="text-gray-700">Confirm New Password *</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"

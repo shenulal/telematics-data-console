@@ -109,7 +109,7 @@ export function ResetPasswordModal({ open, onClose, userId, userName }: ResetPas
 
             <div>
               <div className="flex items-center justify-between">
-                <Label htmlFor="newPassword">New Password * (min 8 characters)</Label>
+                <Label htmlFor="newPassword" className="text-gray-700">New Password * (min 8 characters)</Label>
                 <Button
                   type="button"
                   variant="ghost"
@@ -140,7 +140,7 @@ export function ResetPasswordModal({ open, onClose, userId, userName }: ResetPas
             </div>
 
             <div>
-              <Label htmlFor="confirmPassword">Confirm New Password *</Label>
+              <Label htmlFor="confirmPassword" className="text-gray-700">Confirm New Password *</Label>
               <div className="relative">
                 <Input
                   id="confirmPassword"
