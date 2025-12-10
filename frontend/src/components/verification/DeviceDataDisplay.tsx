@@ -225,6 +225,11 @@ export function DeviceDataDisplay() {
     return String(value);
   };
 
+  // Check if coordinates are valid (not null, undefined, or 0)
+  const hasValidCoordinates = (lat: number | null | undefined, lng: number | null | undefined): boolean => {
+    return lat !== null && lat !== undefined && lat !== 0 && lng !== null && lng !== undefined && lng !== 0;
+  };
+
   // Get status color for header
   const getStatusBgColor = (status?: string | unknown) => {
     const s = typeof status === 'string' ? status.toUpperCase() : '';
@@ -274,39 +279,43 @@ export function DeviceDataDisplay() {
           </div>
         </div>
         {/* Location Section */}
-        {data.latitude && data.longitude && (
-          <div className="bg-gray-50 rounded-lg p-3">
-            <div className="flex items-start gap-2">
-              <MapPin className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-gray-500 mb-1">Location</p>
-                {data.locationName && (
-                  <p className="text-sm font-medium text-gray-800 mb-1">{data.locationName}</p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                  <span className="font-mono text-gray-600">
-                    {data.latitude.toFixed(6)}, {data.longitude.toFixed(6)}
-                  </span>
-                  {data.locationProximity !== undefined && data.locationProximity !== null && (
-                    <span className="text-gray-500">
-                      Proximity: {(data.locationProximity * 1000).toFixed(0)}m
-                    </span>
+        <div className="bg-gray-50 rounded-lg p-3">
+          <div className="flex items-start gap-2">
+            <MapPin className={`h-4 w-4 mt-0.5 flex-shrink-0 ${hasValidCoordinates(data.latitude, data.longitude) ? 'text-blue-600' : 'text-gray-400'}`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-gray-500 mb-1">Location</p>
+              {hasValidCoordinates(data.latitude, data.longitude) ? (
+                <>
+                  {data.locationName && (
+                    <p className="text-sm font-medium text-gray-800 mb-1">{data.locationName}</p>
                   )}
-                  <a
-                    href={`https://www.google.com/maps?q=${data.latitude},${data.longitude}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Navigation className="h-3 w-3" />
-                    View on Maps
-                  </a>
-                </div>
-              </div>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                    <span className="font-mono text-gray-600">
+                      {data.latitude?.toFixed(6)}, {data.longitude?.toFixed(6)}
+                    </span>
+                    {data.locationProximity !== undefined && data.locationProximity !== null && (
+                      <span className="text-gray-500">
+                        Proximity: {(data.locationProximity * 1000).toFixed(0)}m
+                      </span>
+                    )}
+                    <a
+                      href={`https://www.google.com/maps?q=${data.latitude},${data.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Navigation className="h-3 w-3" />
+                      View on Maps
+                    </a>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No coordinates available</p>
+              )}
             </div>
           </div>
-        )}
+        </div>
       </CardContent>
 
       {/* Expanded Content - Device Parameters */}

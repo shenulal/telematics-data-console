@@ -10,9 +10,17 @@ import { Alert } from "@/components/ui/alert";
 import { imeiApi } from "@/lib/api";
 import { useVerificationStore } from "@/lib/store";
 
+// Error type for proper styling
+type ErrorType = "error" | "warning" | "info";
+
+interface ApiError {
+  message: string;
+  type: ErrorType;
+}
+
 export function ImeiInput() {
   const [imei, setImei] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerError, setScannerError] = useState<string | null>(null);
   const { setImei: storeImei, setDeviceData, setLiveDeviceData, setLoading, isLoading } =
@@ -20,6 +28,81 @@ export function ImeiInput() {
   const router = useRouter();
   const scannerRef = useRef<HTMLDivElement>(null);
   const html5QrCodeRef = useRef<unknown>(null);
+
+  // Parse API error and return appropriate message and type
+  const parseApiError = (err: unknown): ApiError => {
+    const error = err as { response?: { status: number; data?: { message?: string } } };
+    const status = error.response?.status;
+    const message = error.response?.data?.message || "";
+
+    switch (status) {
+      case 400:
+        // Bad Request - e.g., IMEI cannot be empty
+        return {
+          message: message || "Invalid request. Please check the IMEI number.",
+          type: "warning"
+        };
+      case 401:
+        // Unauthorized - e.g., Invalid Token / Authentication Failed
+        return {
+          message: message || "Authentication failed. Please try again later.",
+          type: "error"
+        };
+      case 403:
+        // Forbidden - Access denied
+        return {
+          message: message || "You are not authorized to access this IMEI.",
+          type: "error"
+        };
+      case 404:
+        // Not Found - Device not found or No data for device
+        return {
+          message: message || "Device not found. Please check the IMEI number.",
+          type: "info"
+        };
+      case 500:
+        // Server Error - No Server Defined or other exceptions
+        if (message.toLowerCase().includes("no server defined")) {
+          return {
+            message: message || "No server defined for this device.",
+            type: "warning"
+          };
+        }
+        return {
+          message: message || "An unexpected error occurred. Please try again.",
+          type: "error"
+        };
+      default:
+        return {
+          message: message || "An error occurred. Please try again.",
+          type: "error"
+        };
+    }
+  };
+
+  // Get alert variant based on error type
+  const getAlertVariant = (type: ErrorType): "destructive" | "warning" | "info" => {
+    switch (type) {
+      case "error":
+        return "destructive";
+      case "warning":
+        return "warning";
+      case "info":
+        return "info";
+    }
+  };
+
+  // Get alert title based on error type
+  const getAlertTitle = (type: ErrorType): string => {
+    switch (type) {
+      case "error":
+        return "Error";
+      case "warning":
+        return "Warning";
+      case "info":
+        return "Information";
+    }
+  };
 
   const validateImei = (value: string): boolean => {
     // IMEI should be 15 digits
@@ -145,7 +228,7 @@ export function ImeiInput() {
     const cleanImei = imei.replace(/\D/g, "");
 
     if (!validateImei(cleanImei)) {
-      setError("Please enter a valid 15-digit IMEI number");
+      setError({ message: "Please enter a valid 15-digit IMEI number", type: "warning" });
       return;
     }
 
@@ -157,7 +240,7 @@ export function ImeiInput() {
       const accessResponse = await imeiApi.checkAccess(cleanImei);
 
       if (!accessResponse.data.hasAccess) {
-        setError("You are not authorized to access this IMEI");
+        setError({ message: "You are not authorized to access this IMEI", type: "error" });
         setLoading(false);
         return;
       }
@@ -172,17 +255,9 @@ export function ImeiInput() {
 
       router.push("/verify/result");
     } catch (err: unknown) {
-      const error = err as { response?: { status: number; data?: { message?: string } } };
-      if (error.response?.status === 403) {
-        setError(
-          error.response?.data?.message ||
-            "Restricted Access – You are not authorized to view data for this IMEI."
-        );
-      } else if (error.response?.status === 404) {
-        setError("Device not found. Please check the IMEI number.");
-      } else {
-        setError("An error occurred. Please try again.");
-      }
+      // Use the parseApiError function to get appropriate message and type
+      const apiError = parseApiError(err);
+      setError(apiError);
     } finally {
       setLoading(false);
     }
@@ -224,8 +299,8 @@ export function ImeiInput() {
             </div>
 
             {error && (
-              <Alert variant="destructive" title="Access Denied">
-                {error}
+              <Alert variant={getAlertVariant(error.type)} title={getAlertTitle(error.type)}>
+                {error.message}
               </Alert>
             )}
 
