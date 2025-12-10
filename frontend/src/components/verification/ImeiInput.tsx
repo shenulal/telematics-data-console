@@ -43,12 +43,32 @@ export function ImeiInput() {
 
   // Handle scanned code
   const handleScanSuccess = useCallback((decodedText: string) => {
-    // Extract digits from the scanned text (IMEI should be 15 digits)
-    const cleanImei = decodedText.replace(/\D/g, "");
+    // Strip any AIM code prefix (e.g., ]C0, ]C1, ]C2 for Code 128, ]d1 for DataMatrix, etc.)
+    // These are symbology identifiers that some scanners add on Android
+    let cleanText = decodedText;
+    if (cleanText.startsWith("]")) {
+      // AIM code format: ]Xn where X is letter, n is digit
+      cleanText = cleanText.replace(/^\][A-Za-z]\d/, "");
+    }
 
-    if (cleanImei.length >= 15) {
-      // Take first 15 digits
-      setImei(cleanImei.substring(0, 15));
+    // Extract digits from the scanned text (IMEI should be 15 digits)
+    const cleanImei = cleanText.replace(/\D/g, "");
+
+    if (cleanImei.length === 15) {
+      // Exact 15 digits - perfect IMEI
+      setImei(cleanImei);
+      setShowScanner(false);
+      setScannerError(null);
+    } else if (cleanImei.length === 16 && cleanImei.startsWith("1")) {
+      // Android barcode scanner sometimes adds a leading "1" (symbology identifier remnant)
+      // Check if removing it gives a valid 15-digit IMEI
+      const imeiWithoutPrefix = cleanImei.substring(1);
+      setImei(imeiWithoutPrefix);
+      setShowScanner(false);
+      setScannerError(null);
+    } else if (cleanImei.length > 15) {
+      // More than 15 digits - take last 15 (IMEI is typically at the end)
+      setImei(cleanImei.substring(cleanImei.length - 15));
       setShowScanner(false);
       setScannerError(null);
     } else if (cleanImei.length > 0) {
