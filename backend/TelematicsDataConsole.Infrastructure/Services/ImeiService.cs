@@ -168,7 +168,16 @@ public class ImeiService : IImeiService
 
         if (existingLog != null)
         {
-            // Return existing log without creating a new one
+            // Update existing log with new data
+            existingLog.VerificationStatus = request.VerificationStatus;
+            existingLog.Notes = request.Notes;
+            if (request.GpsData != null)
+            {
+                existingLog.Latitude = request.GpsData.Latitude;
+                existingLog.Longitude = request.GpsData.Longitude;
+                existingLog.GpsTime = request.GpsData.GpsTime;
+            }
+            await _context.SaveChangesAsync();
             return new VerificationResult { Success = true, VerificationId = existingLog.VerificationId };
         }
 
@@ -176,6 +185,12 @@ public class ImeiService : IImeiService
         {
             TechnicianId = technicianId,
             DeviceId = deviceId,
+            Imei = request.Imei,
+            VerificationStatus = request.VerificationStatus,
+            Notes = request.Notes,
+            Latitude = request.GpsData?.Latitude,
+            Longitude = request.GpsData?.Longitude,
+            GpsTime = request.GpsData?.GpsTime,
             VerifiedAt = DateTime.UtcNow
         };
 
@@ -187,18 +202,41 @@ public class ImeiService : IImeiService
         return new VerificationResult { Success = true, VerificationId = log.VerificationId };
     }
 
-    public async Task<IEnumerable<VerificationHistoryDto>> GetVerificationHistoryAsync(int technicianId, int? days = 30)
+    public async Task<VerificationHistoryPagedResult> GetVerificationHistoryAsync(int technicianId, VerificationHistoryFilterDto filter)
     {
-        var fromDate = DateTime.UtcNow.AddDays(-(days ?? 30));
-        return await _context.VerificationLogs
-            .Where(v => v.TechnicianId == technicianId && v.VerifiedAt >= fromDate)
+        // Default to current day if no dates provided
+        var fromDate = filter.FromDate ?? DateTime.UtcNow.Date;
+        var toDate = filter.ToDate ?? DateTime.UtcNow.Date.AddDays(1).AddSeconds(-1);
+
+        var query = _context.VerificationLogs
+            .Where(v => v.TechnicianId == technicianId && v.VerifiedAt >= fromDate && v.VerifiedAt <= toDate);
+
+        var totalCount = await query.CountAsync();
+
+        var items = await query
             .OrderByDescending(v => v.VerifiedAt)
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
             .Select(v => new VerificationHistoryDto
             {
                 VerificationId = v.VerificationId,
                 DeviceId = v.DeviceId,
+                Imei = v.Imei,
+                VerificationStatus = v.VerificationStatus,
+                Notes = v.Notes,
+                Latitude = v.Latitude,
+                Longitude = v.Longitude,
+                GpsTime = v.GpsTime,
                 VerifiedAt = v.VerifiedAt
             }).ToListAsync();
+
+        return new VerificationHistoryPagedResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = filter.Page,
+            PageSize = filter.PageSize
+        };
     }
 
     /// <summary>
@@ -375,7 +413,16 @@ public class ImeiService : IImeiService
 
         if (existingLog != null)
         {
-            // Return existing log without creating a new one
+            // Update existing log with new data
+            existingLog.VerificationStatus = request.VerificationStatus;
+            existingLog.Notes = request.Notes;
+            if (request.GpsData != null)
+            {
+                existingLog.Latitude = request.GpsData.Latitude;
+                existingLog.Longitude = request.GpsData.Longitude;
+                existingLog.GpsTime = request.GpsData.GpsTime;
+            }
+            await _context.SaveChangesAsync();
             return new VerificationResult { Success = true, VerificationId = existingLog.VerificationId };
         }
 
@@ -386,6 +433,12 @@ public class ImeiService : IImeiService
         {
             TechnicianId = 0, // 0 indicates admin verification
             DeviceId = deviceId,
+            Imei = request.Imei,
+            VerificationStatus = request.VerificationStatus,
+            Notes = request.Notes,
+            Latitude = request.GpsData?.Latitude,
+            Longitude = request.GpsData?.Longitude,
+            GpsTime = request.GpsData?.GpsTime,
             VerifiedAt = DateTime.UtcNow
         };
 

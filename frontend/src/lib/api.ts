@@ -50,6 +50,14 @@ export const authApi = {
     api.post("/auth/change-password", { currentPassword, newPassword, confirmPassword }),
 };
 
+// History filter interface
+export interface HistoryFilter {
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
 // IMEI API
 export const imeiApi = {
   checkAccess: (imei: string) => api.get(`/imei/${imei}/check-access`),
@@ -57,8 +65,8 @@ export const imeiApi = {
   getLiveDeviceData: (imei: string) => api.get(`/imei/${imei}/live`),
   submitVerification: (data: VerificationRequest) =>
     api.post("/imei/verification", data),
-  getHistory: (days?: number) =>
-    api.get("/imei/history", { params: { days } }),
+  getHistory: (filter?: HistoryFilter) =>
+    api.get("/imei/history", { params: filter }),
 };
 
 // Technician API

@@ -7,7 +7,7 @@ public interface IImeiService
     Task<ImeiAccessResult> CheckAccessAsync(int technicianId, string imei);
     Task<ImeiDataResult> GetDeviceDataAsync(int technicianId, string imei);
     Task<VerificationResult> VerifyDeviceAsync(int technicianId, VerificationRequest request);
-    Task<IEnumerable<VerificationHistoryDto>> GetVerificationHistoryAsync(int technicianId, int? days = 30);
+    Task<VerificationHistoryPagedResult> GetVerificationHistoryAsync(int technicianId, VerificationHistoryFilterDto filter);
 
     // Admin verification methods (for Super Admin, Reseller Admin, Supervisor)
     Task<ImeiAccessResult> CheckAdminAccessAsync(int userId, int? resellerId, string imei);

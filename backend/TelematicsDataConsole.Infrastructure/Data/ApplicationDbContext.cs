@@ -142,7 +142,11 @@ public class ApplicationDbContext : DbContext
             entity.HasIndex(e => e.DeviceId);
             entity.HasIndex(e => e.TechnicianId);
             entity.HasIndex(e => e.VerifiedAt);
+            entity.HasIndex(e => e.Imei);
             entity.HasIndex(e => new { e.TechnicianId, e.DeviceId, e.VerifiedAt });
+            entity.Property(e => e.Imei).HasMaxLength(20);
+            entity.Property(e => e.VerificationStatus).HasMaxLength(50);
+            entity.Property(e => e.Notes).HasMaxLength(1000);
             entity.HasOne(e => e.Technician).WithMany(t => t.VerificationLogs).HasForeignKey(e => e.TechnicianId);
         });
 

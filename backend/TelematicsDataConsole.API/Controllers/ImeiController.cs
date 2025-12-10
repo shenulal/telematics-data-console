@@ -182,17 +182,29 @@ public class ImeiController : ControllerBase
     }
 
     /// <summary>
-    /// Get verification history for current technician
+    /// Get verification history for current technician with date range filtering
     /// </summary>
     [HttpGet("history")]
     [RequirePermission(Permissions.ImeiVerify)]
-    public async Task<IActionResult> GetVerificationHistory([FromQuery] int? days = 30)
+    public async Task<IActionResult> GetVerificationHistory(
+        [FromQuery] DateTime? fromDate = null,
+        [FromQuery] DateTime? toDate = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 50)
     {
         var technicianId = GetTechnicianId();
         if (technicianId == 0)
             return BadRequest(new { message = "Technician ID not found in token" });
 
-        var history = await _imeiService.GetVerificationHistoryAsync(technicianId, days);
+        var filter = new VerificationHistoryFilterDto
+        {
+            FromDate = fromDate,
+            ToDate = toDate,
+            Page = page,
+            PageSize = pageSize
+        };
+
+        var history = await _imeiService.GetVerificationHistoryAsync(technicianId, filter);
         return Ok(history);
     }
 

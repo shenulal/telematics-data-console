@@ -59,6 +59,29 @@ public class VerificationHistoryDto
 {
     public int VerificationId { get; set; }
     public int DeviceId { get; set; }
+    public string Imei { get; set; } = string.Empty;
+    public string VerificationStatus { get; set; } = "Verified";
+    public string? Notes { get; set; }
+    public double? Latitude { get; set; }
+    public double? Longitude { get; set; }
+    public DateTime? GpsTime { get; set; }
     public DateTime VerifiedAt { get; set; }
+}
+
+public class VerificationHistoryFilterDto
+{
+    public DateTime? FromDate { get; set; }
+    public DateTime? ToDate { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 50;
+}
+
+public class VerificationHistoryPagedResult
+{
+    public List<VerificationHistoryDto> Items { get; set; } = new();
+    public int TotalCount { get; set; }
+    public int Page { get; set; }
+    public int PageSize { get; set; }
+    public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
 }
 
