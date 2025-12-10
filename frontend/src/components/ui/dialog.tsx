@@ -38,7 +38,7 @@ export function DialogContent({ children, className, onClose }: DialogContentPro
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1 rounded-sm opacity-70 hover:opacity-100"
+          className="absolute right-4 top-4 p-1 rounded-sm text-gray-500 opacity-70 hover:opacity-100"
         >
           <X className="h-4 w-4" />
         </button>
@@ -58,7 +58,7 @@ export function DialogHeader({ children, className }: { children: React.ReactNod
 
 export function DialogTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h2 className={cn("text-lg font-semibold", className)}>
+    <h2 className={cn("text-lg font-semibold text-gray-900", className)}>
       {children}
     </h2>
   );
