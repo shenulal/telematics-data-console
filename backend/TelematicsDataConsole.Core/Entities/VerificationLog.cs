@@ -15,8 +15,8 @@ public class VerificationLog
     public int VerificationId { get; set; }
     public int TechnicianId { get; set; }
     public int DeviceId { get; set; }
-    public string Imei { get; set; } = string.Empty;
-    public string VerificationStatus { get; set; } = "Verified";
+    public string? Imei { get; set; }
+    public string? VerificationStatus { get; set; } = "Verified";
     public string? Notes { get; set; }
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
