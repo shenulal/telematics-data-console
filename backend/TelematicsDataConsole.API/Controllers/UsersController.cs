@@ -12,25 +12,37 @@ namespace TelematicsDataConsole.API.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IRoleService _roleService;
     private readonly ILogger<UsersController> _logger;
 
-    public UsersController(IUserService userService, ILogger<UsersController> logger)
+    public UsersController(IUserService userService, IRoleService roleService, ILogger<UsersController> logger)
     {
         _userService = userService;
+        _roleService = roleService;
         _logger = logger;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20, 
+    public async Task<IActionResult> GetAll([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         [FromQuery] string? search = null, [FromQuery] short? status = null)
     {
-        var result = await _userService.GetAllAsync(page, pageSize, search, status);
+        var resellerId = GetCurrentResellerId();
+        var isSuperAdmin = User.IsInRole(SystemRoles.SuperAdmin);
+
+        // Non-SuperAdmin users should not see SuperAdmin users
+        var excludeSuperAdmin = !isSuperAdmin;
+
+        var result = await _userService.GetAllAsync(page, pageSize, search, status, resellerId, excludeSuperAdmin);
         return Ok(result);
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetById(int id)
     {
+        // Check access permissions
+        if (!await CanAccessUserAsync(id))
+            return Forbid();
+
         var user = await _userService.GetByIdAsync(id);
         if (user == null)
             return NotFound(new { message = "User not found" });
@@ -42,6 +54,17 @@ public class UsersController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+
+        // Non-SuperAdmin cannot create SuperAdmin users
+        if (!User.IsInRole(SystemRoles.SuperAdmin) && dto.RoleIds != null)
+        {
+            // Check if any of the roles is SuperAdmin
+            var superAdminRoleId = await GetSuperAdminRoleIdAsync();
+            if (superAdminRoleId.HasValue && dto.RoleIds.Contains(superAdminRoleId.Value))
+            {
+                return Forbid();
+            }
+        }
 
         try
         {
@@ -61,6 +84,10 @@ public class UsersController : ControllerBase
     {
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
+
+        // Check access permissions
+        if (!await CanAccessUserAsync(id))
+            return Forbid();
 
         try
         {
@@ -82,6 +109,10 @@ public class UsersController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(int id)
     {
+        // Check access permissions
+        if (!await CanAccessUserAsync(id))
+            return Forbid();
+
         var result = await _userService.DeleteAsync(id);
         if (!result)
             return NotFound(new { message = "User not found" });
@@ -93,9 +124,13 @@ public class UsersController : ControllerBase
     [HttpPost("{id}/reset-password")]
     public async Task<IActionResult> ResetPassword(int id, [FromBody] ResetPasswordDto dto)
     {
+        // Check access permissions
+        if (!await CanAccessUserAsync(id))
+            return Forbid();
+
         var adminId = GetCurrentUserId();
         var result = await _userService.ResetPasswordAsync(id, dto, adminId);
-        
+
         if (!result)
             return NotFound(new { message = "User not found" });
 
@@ -134,6 +169,44 @@ public class UsersController : ControllerBase
     {
         var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
         return int.TryParse(userIdClaim, out var id) ? id : 0;
+    }
+
+    private int? GetCurrentResellerId()
+    {
+        // SuperAdmin has no reseller restriction
+        if (User.IsInRole(SystemRoles.SuperAdmin))
+            return null;
+
+        var resellerIdClaim = User.FindFirst("ResellerId")?.Value;
+        return int.TryParse(resellerIdClaim, out var id) ? id : null;
+    }
+
+    private async Task<bool> CanAccessUserAsync(int targetUserId)
+    {
+        // SuperAdmin can access anyone
+        if (User.IsInRole(SystemRoles.SuperAdmin))
+            return true;
+
+        // Check if target user is a SuperAdmin - non-superadmin users cannot access SuperAdmin
+        var isSuperAdmin = await _userService.IsSuperAdminAsync(targetUserId);
+        if (isSuperAdmin)
+            return false;
+
+        // Reseller Admin can only access users in their reseller
+        var resellerId = GetCurrentResellerId();
+        if (resellerId.HasValue)
+        {
+            var targetUser = await _userService.GetByIdAsync(targetUserId);
+            return targetUser?.ResellerId == resellerId.Value;
+        }
+
+        return true;
+    }
+
+    private async Task<int?> GetSuperAdminRoleIdAsync()
+    {
+        var roles = await _roleService.GetAllAsync(null);
+        return roles.FirstOrDefault(r => r.RoleName == SystemRoles.SuperAdmin)?.RoleId;
     }
 }
 

@@ -18,12 +18,24 @@ public class UserService : IUserService
         _auditService = auditService;
     }
 
-    public async Task<PagedResult<UserDto>> GetAllAsync(int page = 1, int pageSize = 20, string? search = null, short? status = null)
+    public async Task<PagedResult<UserDto>> GetAllAsync(int page = 1, int pageSize = 20, string? search = null, short? status = null, int? resellerId = null, bool excludeSuperAdmin = false)
     {
         var query = _context.Users
             .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
             .Include(u => u.Reseller)
             .AsQueryable();
+
+        // Filter by reseller if specified (Reseller Admin can only see their own users)
+        if (resellerId.HasValue)
+        {
+            query = query.Where(u => u.ResellerId == resellerId.Value);
+        }
+
+        // Exclude SUPERADMIN users for non-superadmin users
+        if (excludeSuperAdmin)
+        {
+            query = query.Where(u => !u.UserRoles.Any(ur => ur.Role.RoleName == SystemRoles.SuperAdmin));
+        }
 
         if (status.HasValue)
             query = query.Where(u => u.Status == status.Value);
@@ -339,5 +351,13 @@ public class UserService : IUserService
                 Roles = u.UserRoles.Select(ur => ur.Role.RoleName).ToList()
             })
             .ToListAsync();
+    }
+
+    public async Task<bool> IsSuperAdminAsync(int userId)
+    {
+        return await _context.Users
+            .Include(u => u.UserRoles).ThenInclude(ur => ur.Role)
+            .Where(u => u.UserId == userId)
+            .AnyAsync(u => u.UserRoles.Any(ur => ur.Role.RoleName == SystemRoles.SuperAdmin));
     }
 }
