@@ -3,28 +3,35 @@
 import { useAuthStore } from "@/lib/store";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { LogOut, Menu, User, MapPin, ChevronDown } from "lucide-react";
+import { LogOut, Menu, User, MapPin, ChevronDown, Lock, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState, useRef, useEffect } from "react";
 import { isSuperAdmin, isResellerAdmin, isSupervisor, isTechnician } from "@/lib/utils";
+import { ChangePasswordModal } from "@/components/modals/ChangePasswordModal";
 
 export function Header() {
   const { user, logout } = useAuthStore();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [adminDropdown, setAdminDropdown] = useState(false);
+  const [userDropdown, setUserDropdown] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = () => {
     logout();
     router.push("/login");
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setAdminDropdown(false);
+      }
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -129,18 +136,50 @@ export function Header() {
 
           {/* User Menu */}
           <div className="flex items-center gap-4">
-            <div className="hidden sm:flex items-center gap-2 text-sm">
-              <User className="h-4 w-4" />
-              <span>{user?.fullName || user?.username}</span>
-              <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">
-                {user?.roles?.[0]}
-              </span>
+            {/* User Dropdown */}
+            <div className="relative" ref={userDropdownRef}>
+              <button
+                onClick={() => setUserDropdown(!userDropdown)}
+                className="hidden sm:flex items-center gap-2 text-sm text-gray-300 hover:text-white px-3 py-2 rounded-md hover:bg-slate-800"
+              >
+                <User className="h-4 w-4" />
+                <span>{user?.fullName || user?.username}</span>
+                <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">
+                  {user?.roles?.[0]}
+                </span>
+                <ChevronDown className="h-4 w-4" />
+              </button>
+
+              {userDropdown && (
+                <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-md shadow-lg py-1 z-50">
+                  <button
+                    onClick={() => {
+                      setChangePasswordOpen(true);
+                      setUserDropdown(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                  >
+                    <Lock className="h-4 w-4" />
+                    Change Password
+                  </button>
+                  <hr className="border-slate-700 my-1" />
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-slate-700 hover:text-white flex items-center gap-2"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Logout
+                  </button>
+                </div>
+              )}
             </div>
+
+            {/* Logout button (shown on mobile) */}
             <Button
               variant="ghost"
               size="icon"
               onClick={handleLogout}
-              className="text-gray-300 hover:text-white hover:bg-slate-800"
+              className="sm:hidden text-gray-300 hover:text-white hover:bg-slate-800"
             >
               <LogOut className="h-5 w-5" />
             </Button>
@@ -220,9 +259,27 @@ export function Header() {
                 </Link>
               </>
             )}
+            {/* Mobile Change Password */}
+            <hr className="border-slate-700 my-2" />
+            <button
+              onClick={() => {
+                setChangePasswordOpen(true);
+                setMenuOpen(false);
+              }}
+              className="w-full text-left text-gray-300 hover:text-white hover:bg-slate-800 px-3 py-2 rounded-md flex items-center gap-2"
+            >
+              <Lock className="h-4 w-4" />
+              Change Password
+            </button>
           </nav>
         )}
       </div>
+
+      {/* Change Password Modal */}
+      <ChangePasswordModal
+        open={changePasswordOpen}
+        onClose={() => setChangePasswordOpen(false)}
+      />
     </header>
   );
 }

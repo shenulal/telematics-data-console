@@ -104,7 +104,6 @@ public class UsersController : ControllerBase
     }
 
     [HttpPost("change-password")]
-    [AllowAnonymous]
     [Authorize]
     public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordDto dto)
     {

@@ -8,8 +8,9 @@ import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { userApi } from "@/lib/api";
 import { getStatusColor, getStatusText, formatDate, USER_STATUS } from "@/lib/utils";
-import { Users, Plus, Search, Edit, Trash2, Lock, Clock } from "lucide-react";
+import { Users, Plus, Search, Edit, Trash2, Lock, Clock, KeyRound } from "lucide-react";
 import { UserFormModal } from "@/components/modals/UserFormModal";
+import { ResetPasswordModal } from "@/components/modals/ResetPasswordModal";
 import { ImportExportButtons } from "@/components/ui/ImportExportButtons";
 
 interface User {
@@ -38,6 +39,7 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [resetPasswordUser, setResetPasswordUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -179,11 +181,19 @@ export default function UsersPage() {
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex gap-2">
-                              <Button variant="ghost" size="icon" onClick={() => handleEdit(user)}>
+                            <div className="flex gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => handleEdit(user)} title="Edit user">
                                 <Edit className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" onClick={() => handleDelete(user.userId)}>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setResetPasswordUser(user)}
+                                title="Reset password"
+                              >
+                                <KeyRound className="h-4 w-4 text-orange-600" />
+                              </Button>
+                              <Button variant="ghost" size="icon" onClick={() => handleDelete(user.userId)} title="Delete user">
                                 <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
@@ -227,6 +237,12 @@ export default function UsersPage() {
         </main>
       </div>
       <UserFormModal open={modalOpen} user={editingUser} onClose={handleModalClose} />
+      <ResetPasswordModal
+        open={!!resetPasswordUser}
+        onClose={() => setResetPasswordUser(null)}
+        userId={resetPasswordUser?.userId || 0}
+        userName={resetPasswordUser?.fullName || resetPasswordUser?.username || ""}
+      />
     </AuthGuard>
   );
 }

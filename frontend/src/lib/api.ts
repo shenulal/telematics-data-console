@@ -46,8 +46,8 @@ export const authApi = {
     api.post("/auth/login", { usernameOrEmail, password }),
   logout: () => api.post("/auth/logout"),
   me: () => api.get("/auth/me"),
-  changePassword: (currentPassword: string, newPassword: string) =>
-    api.post("/auth/change-password", { currentPassword, newPassword }),
+  changePassword: (currentPassword: string, newPassword: string, confirmPassword: string) =>
+    api.post("/auth/change-password", { currentPassword, newPassword, confirmPassword }),
 };
 
 // IMEI API

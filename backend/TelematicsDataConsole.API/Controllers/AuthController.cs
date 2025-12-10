@@ -81,13 +81,20 @@ public class AuthController : ControllerBase
         if (!ModelState.IsValid)
             return BadRequest(ModelState);
 
-        var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
-        var result = await _authService.ChangePasswordAsync(userId, request);
+        try
+        {
+            var userId = int.Parse(User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? "0");
+            var result = await _authService.ChangePasswordAsync(userId, request);
 
-        if (!result)
-            return BadRequest(new { message = "Failed to change password" });
+            if (!result)
+                return NotFound(new { message = "User not found" });
 
-        return Ok(new { message = "Password changed successfully" });
+            return Ok(new { message = "Password changed successfully" });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     /// <summary>

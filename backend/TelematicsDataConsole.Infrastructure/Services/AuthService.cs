@@ -140,7 +140,25 @@ public class AuthService : IAuthService
 
     public Task<AuthResult> RefreshTokenAsync(string refreshToken) => throw new NotImplementedException();
     public Task<bool> LogoutAsync(int userId) => Task.FromResult(true);
-    public Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request) => throw new NotImplementedException();
+
+    public async Task<bool> ChangePasswordAsync(int userId, ChangePasswordRequest request)
+    {
+        var user = await _context.Users.FindAsync(userId);
+        if (user == null) return false;
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("Current password is incorrect");
+        }
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword, 11);
+        user.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(userId, AuditActions.Update, "User", userId.ToString(), null, "Password changed");
+        return true;
+    }
+
     public Task<bool> ResetPasswordAsync(string email) => throw new NotImplementedException();
     public Task<bool> ValidateTokenAsync(string token) => throw new NotImplementedException();
 }
