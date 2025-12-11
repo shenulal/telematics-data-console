@@ -24,6 +24,8 @@ interface Technician {
   workRegion?: string;
   status: number;
   createdAt: string;
+  imeiRestrictionCount?: number;
+  imeiRestrictionMode?: number;
 }
 
 interface PagedResult {
@@ -136,6 +138,7 @@ export default function TechniciansPage() {
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Email</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Reseller</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Region</th>
+                        <th className="px-4 py-3 text-left font-medium text-gray-500">IMEI Restrictions</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Status</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Actions</th>
                       </tr>
@@ -152,6 +155,23 @@ export default function TechniciansPage() {
                           <td className="px-4 py-3">{tech.email}</td>
                           <td className="px-4 py-3">{tech.resellerName || "-"}</td>
                           <td className="px-4 py-3">{tech.workRegion || "-"}</td>
+                          <td className="px-4 py-3">
+                            {tech.imeiRestrictionCount ? (
+                              <span
+                                className={`px-2 py-1 rounded text-xs font-medium cursor-pointer ${
+                                  tech.imeiRestrictionMode === 1
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-red-100 text-red-700"
+                                }`}
+                                onClick={() => router.push(`/admin/technicians/${tech.technicianId}/restrictions`)}
+                                title={tech.imeiRestrictionMode === 1 ? "Allow List" : "Deny List"}
+                              >
+                                {tech.imeiRestrictionCount} {tech.imeiRestrictionMode === 1 ? "Allow" : "Deny"}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">
                             <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusColor(tech.status)}`}>
                               {getStatusText(tech.status)}

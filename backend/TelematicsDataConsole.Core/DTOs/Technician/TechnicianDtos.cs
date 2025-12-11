@@ -19,6 +19,16 @@ public class TechnicianDto
     public short Status { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? LastLoginAt { get; set; }
+
+    /// <summary>
+    /// Number of active IMEI restrictions for this technician
+    /// </summary>
+    public int ImeiRestrictionCount { get; set; }
+
+    /// <summary>
+    /// IMEI Restriction mode: 0 = None, 1 = Allow List (only specific IMEIs allowed), 2 = Deny List (specific IMEIs blocked)
+    /// </summary>
+    public short ImeiRestrictionMode { get; set; }
 }
 
 public class CreateTechnicianDto
