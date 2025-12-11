@@ -13,6 +13,7 @@ const Label = React.forwardRef<HTMLLabelElement, LabelProps>(
         "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
         className
       )}
+      style={{ color: 'var(--foreground)' }}
       {...props}
     />
   )

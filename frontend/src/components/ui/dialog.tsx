@@ -31,14 +31,19 @@ interface DialogContentProps {
 
 export function DialogContent({ children, className, onClose }: DialogContentProps) {
   return (
-    <div className={cn(
-      "relative bg-white rounded-lg shadow-lg max-h-[90vh] overflow-y-auto w-full max-w-lg",
-      className
-    )}>
+    <div
+      className={cn(
+        "relative rounded-lg shadow-lg max-h-[90vh] overflow-y-auto w-full max-w-lg",
+        className
+      )}
+      style={{ backgroundColor: 'var(--card-background)' }}
+      role="dialog"
+    >
       {onClose && (
         <button
           onClick={onClose}
-          className="absolute right-4 top-4 p-1 rounded-sm text-gray-500 opacity-70 hover:opacity-100"
+          className="absolute right-4 top-4 p-1 rounded-sm opacity-70 hover:opacity-100"
+          style={{ color: 'var(--muted)' }}
         >
           <X className="h-4 w-4" />
         </button>
@@ -58,7 +63,7 @@ export function DialogHeader({ children, className }: { children: React.ReactNod
 
 export function DialogTitle({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <h2 className={cn("text-lg font-semibold text-gray-900", className)}>
+    <h2 className={cn("text-lg font-semibold", className)} style={{ color: 'var(--foreground)' }}>
       {children}
     </h2>
   );
@@ -66,7 +71,7 @@ export function DialogTitle({ children, className }: { children: React.ReactNode
 
 export function DialogDescription({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <p className={cn("text-sm text-gray-500 mt-1", className)}>
+    <p className={cn("text-sm mt-1", className)} style={{ color: 'var(--muted)' }}>
       {children}
     </p>
   );
@@ -74,7 +79,10 @@ export function DialogDescription({ children, className }: { children: React.Rea
 
 export function DialogFooter({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("px-6 py-4 bg-gray-50 flex justify-end gap-2 rounded-b-lg", className)}>
+    <div
+      className={cn("px-6 py-4 flex justify-end gap-2 rounded-b-lg", className)}
+      style={{ backgroundColor: 'var(--accent)' }}
+    >
       {children}
     </div>
   );

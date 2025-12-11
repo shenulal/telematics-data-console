@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f9fafb;
   --foreground: #171717;
+  --card-background: #ffffff;
+  --card-border: #e5e7eb;
+  --muted: #6b7280;
+  --muted-foreground: #9ca3af;
+  --accent: #f3f4f6;
+  --accent-foreground: #1f2937;
+  --input-background: #ffffff;
+  --input-border: #d1d5db;
 }
 
 @theme inline {
@@ -14,8 +22,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #0f172a;
+    --foreground: #f1f5f9;
+    --card-background: #1e293b;
+    --card-border: #334155;
+    --muted: #94a3b8;
+    --muted-foreground: #64748b;
+    --accent: #334155;
+    --accent-foreground: #f1f5f9;
+    --input-background: #1e293b;
+    --input-border: #475569;
   }
 }
 
@@ -23,4 +39,71 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Dark mode overrides for common Tailwind classes */
+@media (prefers-color-scheme: dark) {
+  .bg-gray-50 {
+    background-color: var(--background) !important;
+  }
+  .bg-white {
+    background-color: var(--card-background) !important;
+  }
+  .border-gray-200, .border-gray-300 {
+    border-color: var(--card-border) !important;
+  }
+  .text-gray-900 {
+    color: var(--foreground) !important;
+  }
+  .text-gray-700, .text-gray-800 {
+    color: #e2e8f0 !important;
+  }
+  .text-gray-600 {
+    color: #cbd5e1 !important;
+  }
+  .text-gray-500 {
+    color: var(--muted) !important;
+  }
+  .text-gray-400 {
+    color: var(--muted-foreground) !important;
+  }
+  .bg-gray-100 {
+    background-color: #334155 !important;
+  }
+  .hover\:bg-gray-50:hover {
+    background-color: #334155 !important;
+  }
+  .hover\:bg-gray-100:hover {
+    background-color: #475569 !important;
+  }
+  .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+    border-color: var(--card-border) !important;
+  }
+  /* Input styling */
+  input, select, textarea {
+    background-color: var(--input-background) !important;
+    border-color: var(--input-border) !important;
+    color: var(--foreground) !important;
+  }
+  input::placeholder, textarea::placeholder {
+    color: var(--muted-foreground) !important;
+  }
+  /* Table styling */
+  table {
+    background-color: var(--card-background) !important;
+  }
+  th {
+    background-color: #334155 !important;
+    color: #e2e8f0 !important;
+  }
+  td {
+    border-color: var(--card-border) !important;
+  }
+  tr:hover {
+    background-color: #334155 !important;
+  }
+  /* Dialog/Modal styling */
+  [role="dialog"] {
+    background-color: var(--card-background) !important;
+  }
 }
