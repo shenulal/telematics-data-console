@@ -154,7 +154,7 @@ public class ImeiRestrictionService : IImeiRestrictionService
             r.TechnicianId == technicianId &&
             r.DeviceId == deviceId &&
             r.Status == (int)RestrictionStatus.Active &&
-            r.AccessType == (short)AccessType.Deny &&
+            r.AccessType == (int)AccessType.Deny &&
             (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)));
     }
 

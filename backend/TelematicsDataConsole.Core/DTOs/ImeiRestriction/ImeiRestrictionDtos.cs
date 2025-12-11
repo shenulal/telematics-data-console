@@ -11,8 +11,8 @@ public class ImeiRestrictionDto
     public string? DeviceImei { get; set; }
     public int? TagId { get; set; }
     public string? TagName { get; set; }
-    public short? AccessType { get; set; }
-    public short? Priority { get; set; }
+    public int? AccessType { get; set; }
+    public int? Priority { get; set; }
     public string? Reason { get; set; }
     public bool? IsPermanent { get; set; }
     public DateTime? ValidFrom { get; set; }
@@ -32,9 +32,9 @@ public class CreateImeiRestrictionDto
     public int? TagId { get; set; }
 
     [Required]
-    public short AccessType { get; set; }
+    public int AccessType { get; set; }
 
-    public short? Priority { get; set; }
+    public int? Priority { get; set; }
 
     [MaxLength(255)]
     public string? Reason { get; set; }
@@ -53,8 +53,8 @@ public class UpdateImeiRestrictionDto
 {
     public int? DeviceId { get; set; }
     public int? TagId { get; set; }
-    public short? AccessType { get; set; }
-    public short? Priority { get; set; }
+    public int? AccessType { get; set; }
+    public int? Priority { get; set; }
 
     [MaxLength(255)]
     public string? Reason { get; set; }

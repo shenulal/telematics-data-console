@@ -6,8 +6,8 @@ public class ImeiRestriction
     public int TechnicianId { get; set; }
     public int? DeviceId { get; set; }
     public int? TagId { get; set; }
-    public short? AccessType { get; set; }
-    public short? Priority { get; set; }
+    public int? AccessType { get; set; }
+    public int? Priority { get; set; }
     public string? Reason { get; set; }
     public bool? IsPermanent { get; set; }
     public DateTime? ValidFrom { get; set; }
@@ -24,7 +24,7 @@ public class ImeiRestriction
     public virtual Tag? Tag { get; set; }
 }
 
-public enum AccessType : short
+public enum AccessType
 {
     Allow = 1,
     Deny = 2
