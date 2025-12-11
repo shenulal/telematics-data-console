@@ -23,7 +23,6 @@ public class TechnicianService : ITechnicianService
         var query = _context.Technicians
             .Include(t => t.User)
             .Include(t => t.Reseller)
-            .Include(t => t.ImeiRestrictions)
             .AsQueryable();
 
         if (filter.ResellerId.HasValue)
@@ -46,14 +45,12 @@ public class TechnicianService : ITechnicianService
 
         var totalCount = await query.CountAsync();
 
-        // Materialize first to ensure navigation properties are loaded
-        var entities = await query
+        var items = await query
             .OrderByDescending(t => t.CreatedAt)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
+            .Select(t => MapToDto(t))
             .ToListAsync();
-
-        var items = entities.Select(t => MapToDto(t)).ToList();
 
         return new PagedResult<TechnicianDto>
         {
@@ -69,7 +66,6 @@ public class TechnicianService : ITechnicianService
         var technician = await _context.Technicians
             .Include(t => t.User)
             .Include(t => t.Reseller)
-            .Include(t => t.ImeiRestrictions)
             .FirstOrDefaultAsync(t => t.TechnicianId == id);
 
         return technician != null ? MapToDto(technician) : null;
@@ -80,7 +76,6 @@ public class TechnicianService : ITechnicianService
         var technician = await _context.Technicians
             .Include(t => t.User)
             .Include(t => t.Reseller)
-            .Include(t => t.ImeiRestrictions)
             .FirstOrDefaultAsync(t => t.UserId == userId);
 
         return technician != null ? MapToDto(technician) : null;
@@ -210,43 +205,23 @@ public class TechnicianService : ITechnicianService
         };
     }
 
-    private static TechnicianDto MapToDto(Technician t)
+    private static TechnicianDto MapToDto(Technician t) => new()
     {
-        // Calculate restriction mode from active restrictions
-        var now = DateTime.UtcNow;
-        var activeRestrictions = t.ImeiRestrictions?
-            .Where(r => r.Status == (int)RestrictionStatus.Active &&
-                       (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
-            .ToList() ?? new List<ImeiRestriction>();
-
-        // Mode: 0 = None, 1 = Allow List (has Allow restrictions), 2 = Deny List (has only Deny restrictions)
-        short restrictionMode = 0;
-        if (activeRestrictions.Any())
-        {
-            var hasAllowRestrictions = activeRestrictions.Any(r => r.AccessType == (short)AccessType.Allow);
-            restrictionMode = hasAllowRestrictions ? (short)1 : (short)2;
-        }
-
-        return new TechnicianDto
-        {
-            TechnicianId = t.TechnicianId,
-            UserId = t.UserId,
-            Username = t.User.Username,
-            Email = t.User.Email,
-            FullName = t.User.FullName,
-            ResellerId = t.ResellerId,
-            ResellerName = t.Reseller?.CompanyName,
-            EmployeeCode = t.EmployeeCode,
-            Skillset = t.Skillset,
-            Certification = t.Certification,
-            WorkRegion = t.WorkRegion,
-            DailyLimit = t.DailyLimit,
-            Status = t.Status,
-            CreatedAt = t.CreatedAt,
-            LastLoginAt = t.User.LastLoginAt,
-            ImeiRestrictionCount = activeRestrictions.Count,
-            ImeiRestrictionMode = restrictionMode
-        };
-    }
+        TechnicianId = t.TechnicianId,
+        UserId = t.UserId,
+        Username = t.User.Username,
+        Email = t.User.Email,
+        FullName = t.User.FullName,
+        ResellerId = t.ResellerId,
+        ResellerName = t.Reseller?.CompanyName,
+        EmployeeCode = t.EmployeeCode,
+        Skillset = t.Skillset,
+        Certification = t.Certification,
+        WorkRegion = t.WorkRegion,
+        DailyLimit = t.DailyLimit,
+        Status = t.Status,
+        CreatedAt = t.CreatedAt,
+        LastLoginAt = t.User.LastLoginAt
+    };
 }
 
