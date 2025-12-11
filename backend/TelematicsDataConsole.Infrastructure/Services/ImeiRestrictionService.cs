@@ -20,32 +20,38 @@ public class ImeiRestrictionService : IImeiRestrictionService
 
     public async Task<PagedResult<ImeiRestrictionDto>> GetByTechnicianAsync(int technicianId, int page = 1, int pageSize = 20)
     {
-        var query = _context.ImeiRestrictions
-            .Include(r => r.Tag)
-            .Where(r => r.TechnicianId == technicianId);
+        // Count without any includes
+        var totalCount = await _context.ImeiRestrictions
+            .Where(r => r.TechnicianId == technicianId)
+            .CountAsync();
 
-        var totalCount = await query.CountAsync();
-
-        // Materialize entities first, then map to DTO
-        var entities = await query
+        // Fetch entities without includes
+        var entities = await _context.ImeiRestrictions
+            .Where(r => r.TechnicianId == technicianId)
             .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync();
 
-        // Fetch technician separately to avoid complex include chain
+        // Fetch related data separately
+        var tagIds = entities.Where(e => e.TagId.HasValue).Select(e => e.TagId!.Value).Distinct().ToList();
+        var tags = tagIds.Count > 0
+            ? await _context.Tags.Where(t => tagIds.Contains(t.TagId)).ToDictionaryAsync(t => t.TagId)
+            : new Dictionary<int, Tag>();
+
         var technician = await _context.Technicians
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.TechnicianId == technicianId);
+            .Where(t => t.TechnicianId == technicianId)
+            .Select(t => new { t.TechnicianId, UserName = t.User != null ? (t.User.FullName ?? t.User.Username) : null })
+            .FirstOrDefaultAsync();
 
         var items = entities.Select(r => new ImeiRestrictionDto
         {
             RestrictionId = r.RestrictionId,
             TechnicianId = r.TechnicianId,
-            TechnicianName = technician?.User?.FullName ?? technician?.User?.Username,
+            TechnicianName = technician?.UserName,
             DeviceId = r.DeviceId,
             TagId = r.TagId,
-            TagName = r.Tag?.TagName,
+            TagName = r.TagId.HasValue && tags.ContainsKey(r.TagId.Value) ? tags[r.TagId.Value].TagName : null,
             AccessType = r.AccessType,
             Priority = r.Priority,
             Reason = r.Reason,
@@ -156,25 +162,30 @@ public class ImeiRestrictionService : IImeiRestrictionService
     {
         var now = DateTime.UtcNow;
         var entities = await _context.ImeiRestrictions
-            .Include(r => r.Tag)
             .Where(r => r.TechnicianId == technicianId &&
                        r.Status == (int)RestrictionStatus.Active &&
                        (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
             .ToListAsync();
 
-        // Fetch technician separately to avoid complex include chain
+        // Fetch related data separately
+        var tagIds = entities.Where(e => e.TagId.HasValue).Select(e => e.TagId!.Value).Distinct().ToList();
+        var tags = tagIds.Count > 0
+            ? await _context.Tags.Where(t => tagIds.Contains(t.TagId)).ToDictionaryAsync(t => t.TagId)
+            : new Dictionary<int, Tag>();
+
         var technician = await _context.Technicians
-            .Include(t => t.User)
-            .FirstOrDefaultAsync(t => t.TechnicianId == technicianId);
+            .Where(t => t.TechnicianId == technicianId)
+            .Select(t => new { t.TechnicianId, UserName = t.User != null ? (t.User.FullName ?? t.User.Username) : null })
+            .FirstOrDefaultAsync();
 
         return entities.Select(r => new ImeiRestrictionDto
         {
             RestrictionId = r.RestrictionId,
             TechnicianId = r.TechnicianId,
-            TechnicianName = technician?.User?.FullName ?? technician?.User?.Username,
+            TechnicianName = technician?.UserName,
             DeviceId = r.DeviceId,
             TagId = r.TagId,
-            TagName = r.Tag?.TagName,
+            TagName = r.TagId.HasValue && tags.ContainsKey(r.TagId.Value) ? tags[r.TagId.Value].TagName : null,
             AccessType = r.AccessType,
             Priority = r.Priority,
             Reason = r.Reason,
