@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using TelematicsDataConsole.Core.DTOs.Imei;
 using TelematicsDataConsole.Core.Entities;
 using TelematicsDataConsole.Core.Interfaces.Services;
@@ -12,12 +13,14 @@ public class ImeiService : IImeiService
     private readonly ApplicationDbContext _context;
     private readonly IAuditService _auditService;
     private readonly IGpsDataProvider _gpsDataProvider;
+    private readonly ILogger<ImeiService> _logger;
 
-    public ImeiService(ApplicationDbContext context, IAuditService auditService, IGpsDataProvider gpsDataProvider)
+    public ImeiService(ApplicationDbContext context, IAuditService auditService, IGpsDataProvider gpsDataProvider, ILogger<ImeiService> logger)
     {
         _context = context;
         _auditService = auditService;
         _gpsDataProvider = gpsDataProvider;
+        _logger = logger;
     }
 
     public async Task<ImeiAccessResult> CheckAccessAsync(int technicianId, string imei)
@@ -71,18 +74,25 @@ public class ImeiService : IImeiService
         return new ImeiAccessResult { HasAccess = true, DeviceId = deviceId };
     }
 
-    private async Task<bool> CheckImeiRestrictions(Technician technician, int deviceId)
+    private Task<bool> CheckImeiRestrictions(Technician technician, int deviceId)
     {
+        _logger.LogInformation("CheckImeiRestrictions: TechnicianId={TechnicianId}, DeviceId={DeviceId}",
+            technician.TechnicianId, deviceId);
+
         var now = DateTime.UtcNow;
         var activeRestrictions = technician.ImeiRestrictions
             .Where(r => r.Status == (int)RestrictionStatus.Active &&
                        (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
             .ToList();
 
+        _logger.LogInformation("Found {Count} active restrictions for technician {TechnicianId}",
+            activeRestrictions.Count, technician.TechnicianId);
+
         if (!activeRestrictions.Any())
         {
             // No restrictions - allow access to any IMEI
-            return true;
+            _logger.LogInformation("No active restrictions - allowing access");
+            return Task.FromResult(true);
         }
 
         // Determine restriction mode based on the types of restrictions present
@@ -91,24 +101,47 @@ public class ImeiService : IImeiService
         bool hasAllowRestrictions = activeRestrictions.Any(r => r.AccessType == (short)AccessType.Allow);
         bool hasDenyRestrictions = activeRestrictions.Any(r => r.AccessType == (short)AccessType.Deny);
 
+        _logger.LogInformation("Restriction mode: hasAllowRestrictions={HasAllow}, hasDenyRestrictions={HasDeny}",
+            hasAllowRestrictions, hasDenyRestrictions);
+
         // Check direct device restrictions first (highest priority)
         var directRestriction = activeRestrictions.FirstOrDefault(r => r.DeviceId == deviceId);
         if (directRestriction != null)
         {
-            return directRestriction.AccessType == (short)AccessType.Allow;
+            var result = directRestriction.AccessType == (short)AccessType.Allow;
+            _logger.LogInformation("Direct device restriction found: AccessType={AccessType}, Result={Result}",
+                directRestriction.AccessType, result);
+            return Task.FromResult(result);
         }
 
         // Check tag-based restrictions
         foreach (var restriction in activeRestrictions.Where(r => r.TagId != null))
         {
+            _logger.LogInformation("Checking tag-based restriction: RestrictionId={RestrictionId}, TagId={TagId}, AccessType={AccessType}",
+                restriction.RestrictionId, restriction.TagId, restriction.AccessType);
+
             // Get device IDs from tag items (EntityType 1 = Device)
-            var tagDevices = restriction.Tag?.TagItems
+            var tagItems = restriction.Tag?.TagItems
                 .Where(ti => ti.EntityType == (short)TagEntityType.Device)
-                .Select(ti => ti.EntityId)
-                .ToList() ?? new List<long>();
-            if (tagDevices.Contains(deviceId))
+                .ToList() ?? new List<TagItem>();
+
+            _logger.LogInformation("Tag {TagId} has {Count} device items", restriction.TagId, tagItems.Count);
+
+            foreach (var ti in tagItems)
             {
-                return restriction.AccessType == (short)AccessType.Allow;
+                _logger.LogDebug("TagItem: EntityId={EntityId}, EntityIdentifier={EntityIdentifier}",
+                    ti.EntityId, ti.EntityIdentifier);
+            }
+
+            var tagDevices = tagItems.Select(ti => ti.EntityId).ToList();
+
+            // Cast deviceId to long for proper comparison
+            if (tagDevices.Contains((long)deviceId))
+            {
+                var result = restriction.AccessType == (short)AccessType.Allow;
+                _logger.LogInformation("Device {DeviceId} found in tag {TagId}: AccessType={AccessType}, Result={Result}",
+                    deviceId, restriction.TagId, restriction.AccessType, result);
+                return Task.FromResult(result);
             }
         }
 
@@ -117,15 +150,18 @@ public class ImeiService : IImeiService
         // If only Deny restrictions (deny-list mode): allow by default (device not in deny list)
         if (hasAllowRestrictions)
         {
-            return false; // Allow-list mode: deny devices not in the list
+            _logger.LogInformation("Device {DeviceId} not found in any allow list - denying access", deviceId);
+            return Task.FromResult(false); // Allow-list mode: deny devices not in the list
         }
         else if (hasDenyRestrictions)
         {
-            return true; // Deny-list mode: allow devices not in the list
+            _logger.LogInformation("Device {DeviceId} not found in any deny list - allowing access", deviceId);
+            return Task.FromResult(true); // Deny-list mode: allow devices not in the list
         }
 
         // Fallback: allow
-        return true;
+        _logger.LogInformation("Fallback: allowing access for device {DeviceId}", deviceId);
+        return Task.FromResult(true);
     }
 
     public async Task<ImeiDataResult> GetDeviceDataAsync(int technicianId, string imei)

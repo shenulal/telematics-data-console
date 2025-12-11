@@ -1,35 +1,61 @@
+using Microsoft.Extensions.Logging;
 using TelematicsDataConsole.Core.DTOs.Imei;
+using TelematicsDataConsole.Core.Interfaces.Services;
 
 namespace TelematicsDataConsole.Infrastructure.Services;
 
 /// <summary>
-/// Mock GPS data provider for development and testing.
-/// Replace with actual GPS data source integration in production.
+/// Real GPS data provider that uses the ExternalDeviceService to get actual device IDs.
 /// </summary>
-public class MockGpsDataProvider : IGpsDataProvider
+public class RealGpsDataProvider : IGpsDataProvider
 {
+    private readonly IExternalDeviceService _externalDeviceService;
+    private readonly ILogger<RealGpsDataProvider> _logger;
     private static readonly Random _random = new();
 
-    public Task<int?> GetDeviceIdByImeiAsync(string imei)
+    public RealGpsDataProvider(IExternalDeviceService externalDeviceService, ILogger<RealGpsDataProvider> logger)
     {
-        // In production, this would query your GPS tracking device database
-        // For demo, we'll generate a consistent device ID from the IMEI
-        if (string.IsNullOrEmpty(imei) || imei.Length < 5)
-            return Task.FromResult<int?>(null);
-
-        var deviceId = Math.Abs(imei.GetHashCode() % 100000);
-        return Task.FromResult<int?>(deviceId);
+        _externalDeviceService = externalDeviceService;
+        _logger = logger;
     }
 
-    public Task<DeviceDataDto?> GetDeviceDataAsync(string imei)
+    public async Task<int?> GetDeviceIdByImeiAsync(string imei)
+    {
+        if (string.IsNullOrEmpty(imei) || imei.Length < 5)
+            return null;
+
+        try
+        {
+            var device = await _externalDeviceService.GetByImeiAsync(imei);
+            if (device == null)
+            {
+                _logger.LogWarning("Device not found in external database for IMEI: {Imei}", imei);
+                return null;
+            }
+
+            _logger.LogDebug("Found device {DeviceId} for IMEI {Imei}", device.DeviceId, imei);
+            return (int)device.DeviceId;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error fetching device ID for IMEI: {Imei}", imei);
+            return null;
+        }
+    }
+
+    public async Task<DeviceDataDto?> GetDeviceDataAsync(string imei)
     {
         if (string.IsNullOrEmpty(imei))
-            return Task.FromResult<DeviceDataDto?>(null);
+            return null;
 
-        // Generate mock GPS data
+        // Get the real device ID from the external database
+        var device = await _externalDeviceService.GetByImeiAsync(imei);
+        var deviceId = device?.DeviceId ?? Math.Abs(imei.GetHashCode() % 100000);
+
+        // Generate mock GPS data but with real device ID
         var deviceData = new DeviceDataDto
         {
-            DeviceId = Math.Abs(imei.GetHashCode() % 100000),
+            DeviceId = (int)deviceId,
             Imei = imei,
             SerialNumber = $"SN-{imei[..8]}",
             DeviceModel = "GT06N",
@@ -63,7 +89,7 @@ public class MockGpsDataProvider : IGpsDataProvider
             }
         };
 
-        return Task.FromResult<DeviceDataDto?>(deviceData);
+        return deviceData;
     }
 
     private static string GetRandomMake()

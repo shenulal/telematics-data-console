@@ -86,17 +86,17 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IExternalDeviceService, ExternalDeviceService>(); // Must be before IGpsDataProvider
+builder.Services.AddScoped<IGpsDataProvider, RealGpsDataProvider>(); // Uses real device IDs from ExternalDeviceService
 builder.Services.AddScoped<IImeiService, ImeiService>();
 builder.Services.AddScoped<ITechnicianService, TechnicianService>();
 builder.Services.AddScoped<IResellerService, ResellerService>();
 builder.Services.AddScoped<IImeiRestrictionService, ImeiRestrictionService>();
-builder.Services.AddScoped<IGpsDataProvider, MockGpsDataProvider>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IPermissionService, PermissionService>();
 builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IVerificationLogService, VerificationLogService>();
-builder.Services.AddScoped<IExternalDeviceService, ExternalDeviceService>();
 builder.Services.AddScoped<IImportExportService, ImportExportService>();
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddHttpClient<IVzoneApiService, VzoneApiService>();
