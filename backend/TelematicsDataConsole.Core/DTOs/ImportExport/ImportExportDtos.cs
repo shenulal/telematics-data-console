@@ -22,6 +22,21 @@ public class ExportTagItemDto
     public string? EntityIdentifier { get; set; }
 }
 
+/// <summary>
+/// Detailed export of tag items with enriched data
+/// </summary>
+public class ExportTagItemDetailDto
+{
+    public int TagItemId { get; set; }
+    public int TagId { get; set; }
+    public string TagName { get; set; } = string.Empty;
+    public short EntityType { get; set; }
+    public string EntityTypeName { get; set; } = string.Empty;
+    public long EntityId { get; set; }
+    public string? EntityIdentifier { get; set; }
+    public DateTime CreatedAt { get; set; }
+}
+
 public class ExportTechnicianDto
 {
     public int TechnicianId { get; set; }
@@ -104,6 +119,36 @@ public class ImportTagItemDto
     public short EntityType { get; set; } = 1;
     public long EntityId { get; set; }
     public string? EntityIdentifier { get; set; }
+}
+
+/// <summary>
+/// DTO for importing tag items using IMEI (DeviceId will be looked up)
+/// </summary>
+public class ImportTagItemByIdentifierDto
+{
+    /// <summary>
+    /// Entity Type: 1 = Device, 2 = Technician, 3 = Reseller, 4 = User
+    /// </summary>
+    public short EntityType { get; set; } = 1;
+
+    /// <summary>
+    /// For devices: IMEI number
+    /// For technicians: Username or EmployeeCode
+    /// For resellers: CompanyName
+    /// For users: Username or Email
+    /// </summary>
+    [Required]
+    public string Identifier { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Bulk import request for tag items
+/// </summary>
+public class BulkImportTagItemsDto
+{
+    public int TagId { get; set; }
+    public short EntityType { get; set; } = 1;
+    public List<ImportTagItemByIdentifierDto> Items { get; set; } = new();
 }
 
 public class ImportTechnicianDto

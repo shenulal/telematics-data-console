@@ -10,10 +10,12 @@ namespace TelematicsDataConsole.Infrastructure.Services;
 public class ImportExportService : IImportExportService
 {
     private readonly ApplicationDbContext _context;
+    private readonly IExternalDeviceService _externalDeviceService;
 
-    public ImportExportService(ApplicationDbContext context)
+    public ImportExportService(ApplicationDbContext context, IExternalDeviceService externalDeviceService)
     {
         _context = context;
+        _externalDeviceService = externalDeviceService;
     }
 
     // ============ TAGS ============
@@ -856,5 +858,539 @@ public class ImportExportService : IImportExportService
         }
 
         return await ImportRolesAsync(roles, updateExisting);
+    }
+
+    // ============ TAG ITEMS (ManageItems) ============
+
+    public async Task<List<ExportTagItemDetailDto>> ExportTagItemsAsync(int tagId, short? entityType = null)
+    {
+        var query = _context.TagItems
+            .Include(ti => ti.Tag)
+            .Where(ti => ti.TagId == tagId);
+
+        if (entityType.HasValue)
+            query = query.Where(ti => ti.EntityType == entityType.Value);
+
+        var items = await query.AsNoTracking().ToListAsync();
+
+        var result = items.Select(ti => new ExportTagItemDetailDto
+        {
+            TagItemId = ti.TagItemId,
+            TagId = ti.TagId,
+            TagName = ti.Tag.TagName,
+            EntityType = ti.EntityType,
+            EntityTypeName = GetEntityTypeName(ti.EntityType),
+            EntityId = ti.EntityId,
+            EntityIdentifier = ti.EntityIdentifier,
+            CreatedAt = ti.CreatedAt
+        }).ToList();
+
+        // For devices, enrich with device details
+        if (entityType == 1 || !entityType.HasValue)
+        {
+            var deviceItems = result.Where(r => r.EntityType == 1).ToList();
+            var deviceIds = deviceItems.Select(d => d.EntityId).Distinct();
+            var devices = await _externalDeviceService.GetByIdsAsync(deviceIds);
+            var deviceDict = devices.ToDictionary(d => d.DeviceId, d => d.Imei);
+
+            foreach (var item in deviceItems)
+            {
+                if (deviceDict.TryGetValue((int)item.EntityId, out var imei))
+                    item.EntityIdentifier = imei;
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<byte[]> ExportTagItemsToExcelAsync(int tagId, short? entityType = null)
+    {
+        var items = await ExportTagItemsAsync(tagId, entityType);
+        var tag = await _context.Tags.FindAsync(tagId);
+        var tagName = tag?.TagName ?? "Unknown";
+
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("TagItems");
+
+        // Headers
+        ws.Cell(1, 1).Value = "EntityType";
+        ws.Cell(1, 2).Value = "EntityTypeName";
+        ws.Cell(1, 3).Value = "Identifier";
+        ws.Cell(1, 4).Value = "EntityId";
+        ws.Cell(1, 5).Value = "CreatedAt";
+
+        // Style header
+        var headerRange = ws.Range(1, 1, 1, 5);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Data
+        var row = 2;
+        foreach (var item in items)
+        {
+            ws.Cell(row, 1).Value = item.EntityType;
+            ws.Cell(row, 2).Value = item.EntityTypeName;
+            ws.Cell(row, 3).Value = item.EntityIdentifier ?? "";
+            ws.Cell(row, 4).Value = item.EntityId;
+            ws.Cell(row, 5).Value = item.CreatedAt;
+            row++;
+        }
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return stream.ToArray();
+    }
+
+    public async Task<ImportResultDto> ImportTagItemsByIdentifierAsync(int tagId, short entityType, List<ImportTagItemByIdentifierDto> items)
+    {
+        var result = new ImportResultDto { TotalRows = items.Count };
+
+        // Verify tag exists
+        var tag = await _context.Tags.FindAsync(tagId);
+        if (tag == null)
+        {
+            result.FailedCount = items.Count;
+            result.Errors.Add(new ImportErrorDto { RowNumber = 0, ErrorMessage = "Tag not found" });
+            return result;
+        }
+
+        // Get existing items for this tag
+        var existingItems = await _context.TagItems
+            .Where(ti => ti.TagId == tagId && ti.EntityType == entityType)
+            .Select(ti => ti.EntityId)
+            .ToListAsync();
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            var dto = items[i];
+            try
+            {
+                long? entityId = null;
+                string? identifier = dto.Identifier;
+
+                // Look up entity ID based on type
+                switch (entityType)
+                {
+                    case 1: // Device - lookup by IMEI
+                        var device = await _externalDeviceService.GetByImeiAsync(dto.Identifier);
+                        if (device != null)
+                        {
+                            entityId = device.DeviceId;
+                            identifier = device.Imei;
+                        }
+                        break;
+
+                    case 2: // Technician - lookup by Username or EmployeeCode
+                        var technician = await _context.Technicians
+                            .Include(t => t.User)
+                            .FirstOrDefaultAsync(t => t.User.Username == dto.Identifier || t.EmployeeCode == dto.Identifier);
+                        if (technician != null)
+                        {
+                            entityId = technician.TechnicianId;
+                            identifier = technician.User?.FullName ?? technician.User?.Username ?? dto.Identifier;
+                        }
+                        break;
+
+                    case 3: // Reseller - lookup by CompanyName
+                        var reseller = await _context.Resellers
+                            .FirstOrDefaultAsync(r => r.CompanyName == dto.Identifier);
+                        if (reseller != null)
+                        {
+                            entityId = reseller.ResellerId;
+                            identifier = reseller.CompanyName;
+                        }
+                        break;
+
+                    case 4: // User - lookup by Username or Email
+                        var user = await _context.Users
+                            .FirstOrDefaultAsync(u => u.Username == dto.Identifier || u.Email == dto.Identifier);
+                        if (user != null)
+                        {
+                            entityId = user.UserId;
+                            identifier = user.FullName ?? user.Username;
+                        }
+                        break;
+                }
+
+                if (entityId == null)
+                {
+                    result.FailedCount++;
+                    result.Errors.Add(new ImportErrorDto
+                    {
+                        RowNumber = i + 1,
+                        Identifier = dto.Identifier,
+                        ErrorMessage = $"{GetEntityTypeName(entityType)} not found"
+                    });
+                    continue;
+                }
+
+                if (existingItems.Contains(entityId.Value))
+                {
+                    result.FailedCount++;
+                    result.Errors.Add(new ImportErrorDto
+                    {
+                        RowNumber = i + 1,
+                        Identifier = dto.Identifier,
+                        ErrorMessage = "Already exists in this tag"
+                    });
+                    continue;
+                }
+
+                // Add the tag item
+                var tagItem = new TagItem
+                {
+                    TagId = tagId,
+                    EntityType = entityType,
+                    EntityId = entityId.Value,
+                    EntityIdentifier = identifier,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _context.TagItems.Add(tagItem);
+                await _context.SaveChangesAsync();
+                existingItems.Add(entityId.Value); // Track to prevent duplicates in same batch
+                result.SuccessCount++;
+            }
+            catch (Exception ex)
+            {
+                result.FailedCount++;
+                result.Errors.Add(new ImportErrorDto
+                {
+                    RowNumber = i + 1,
+                    Identifier = dto.Identifier,
+                    ErrorMessage = ex.Message
+                });
+            }
+        }
+
+        return result;
+    }
+
+    public async Task<ImportResultDto> ImportTagItemsFromExcelAsync(int tagId, short entityType, Stream fileStream)
+    {
+        using var workbook = new XLWorkbook(fileStream);
+        var ws = workbook.Worksheet(1); // First worksheet
+        var items = new List<ImportTagItemByIdentifierDto>();
+
+        var rows = ws.RangeUsed()?.RowsUsed().Skip(1) ?? Enumerable.Empty<IXLRangeRow>();
+        foreach (var row in rows)
+        {
+            var identifier = row.Cell(1).GetString().Trim();
+            if (!string.IsNullOrEmpty(identifier))
+            {
+                items.Add(new ImportTagItemByIdentifierDto
+                {
+                    EntityType = entityType,
+                    Identifier = identifier
+                });
+            }
+        }
+
+        return await ImportTagItemsByIdentifierAsync(tagId, entityType, items);
+    }
+
+    public Task<byte[]> GetTagItemsImportTemplateAsync(short entityType)
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Import Template");
+
+        // Header based on entity type
+        var headerText = entityType switch
+        {
+            1 => "IMEI",
+            2 => "Username or EmployeeCode",
+            3 => "CompanyName",
+            4 => "Username or Email",
+            _ => "Identifier"
+        };
+
+        ws.Cell(1, 1).Value = headerText;
+        ws.Cell(1, 1).Style.Font.Bold = true;
+        ws.Cell(1, 1).Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Add instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+
+        var instructions = entityType switch
+        {
+            1 => "Enter one IMEI per row. The system will automatically look up the Device ID.",
+            2 => "Enter Username or Employee Code for each technician.",
+            3 => "Enter the Company Name for each reseller.",
+            4 => "Enter Username or Email for each user.",
+            _ => "Enter one identifier per row."
+        };
+        ws.Cell(4, 1).Value = instructions;
+
+        // Example rows
+        ws.Cell(6, 1).Value = "Example:";
+        ws.Cell(6, 1).Style.Font.Bold = true;
+        ws.Cell(7, 1).Value = entityType switch
+        {
+            1 => "359632104567890",
+            2 => "john.doe",
+            3 => "ABC Company",
+            4 => "jane.smith@example.com",
+            _ => "identifier1"
+        };
+        ws.Cell(7, 1).Style.Font.Italic = true;
+        ws.Cell(7, 1).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    private static string GetEntityTypeName(short entityType) => entityType switch
+    {
+        1 => "Device",
+        2 => "Technician",
+        3 => "Reseller",
+        4 => "User",
+        _ => "Unknown"
+    };
+
+    // ============ IMPORT TEMPLATES ============
+
+    public Task<byte[]> GetTagsImportTemplateAsync()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Tags");
+
+        // Headers
+        ws.Cell(1, 1).Value = "TagName";
+        ws.Cell(1, 2).Value = "Description";
+        ws.Cell(1, 3).Value = "Color";
+        ws.Cell(1, 4).Value = "Status";
+
+        var headerRange = ws.Range(1, 1, 1, 4);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(4, 1).Value = "TagName: Required. Unique name for the tag.";
+        ws.Cell(5, 1).Value = "Description: Optional. Description of the tag.";
+        ws.Cell(6, 1).Value = "Color: Optional. Hex color code (e.g., #3B82F6).";
+        ws.Cell(7, 1).Value = "Status: 1 = Active, 0 = Inactive.";
+
+        // Example
+        ws.Cell(9, 1).Value = "Example:";
+        ws.Cell(9, 1).Style.Font.Bold = true;
+        ws.Cell(10, 1).Value = "VIP Devices";
+        ws.Cell(10, 2).Value = "High priority devices";
+        ws.Cell(10, 3).Value = "#3B82F6";
+        ws.Cell(10, 4).Value = 1;
+        ws.Row(10).Style.Font.Italic = true;
+        ws.Row(10).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    public Task<byte[]> GetTechniciansImportTemplateAsync()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Technicians");
+
+        // Headers
+        ws.Cell(1, 1).Value = "Username";
+        ws.Cell(1, 2).Value = "Email";
+        ws.Cell(1, 3).Value = "FullName";
+        ws.Cell(1, 4).Value = "Mobile";
+        ws.Cell(1, 5).Value = "EmployeeCode";
+        ws.Cell(1, 6).Value = "ResellerId";
+        ws.Cell(1, 7).Value = "Status";
+
+        var headerRange = ws.Range(1, 1, 1, 7);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(4, 1).Value = "Username: Required. Unique username for login.";
+        ws.Cell(5, 1).Value = "Email: Required. Valid email address.";
+        ws.Cell(6, 1).Value = "FullName: Required. Full name of the technician.";
+        ws.Cell(7, 1).Value = "Mobile: Optional. Mobile phone number.";
+        ws.Cell(8, 1).Value = "EmployeeCode: Optional. Employee ID or code.";
+        ws.Cell(9, 1).Value = "ResellerId: Optional. ID of the reseller this technician belongs to.";
+        ws.Cell(10, 1).Value = "Status: 1 = Active, 0 = Inactive.";
+
+        // Example
+        ws.Cell(12, 1).Value = "Example:";
+        ws.Cell(12, 1).Style.Font.Bold = true;
+        ws.Cell(13, 1).Value = "john.doe";
+        ws.Cell(13, 2).Value = "john.doe@example.com";
+        ws.Cell(13, 3).Value = "John Doe";
+        ws.Cell(13, 4).Value = "+1234567890";
+        ws.Cell(13, 5).Value = "EMP001";
+        ws.Cell(13, 6).Value = "";
+        ws.Cell(13, 7).Value = 1;
+        ws.Row(13).Style.Font.Italic = true;
+        ws.Row(13).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    public Task<byte[]> GetResellersImportTemplateAsync()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Resellers");
+
+        // Headers
+        ws.Cell(1, 1).Value = "CompanyName";
+        ws.Cell(1, 2).Value = "DisplayName";
+        ws.Cell(1, 3).Value = "ContactPerson";
+        ws.Cell(1, 4).Value = "Email";
+        ws.Cell(1, 5).Value = "Mobile";
+        ws.Cell(1, 6).Value = "Phone";
+        ws.Cell(1, 7).Value = "AddressLine1";
+        ws.Cell(1, 8).Value = "City";
+        ws.Cell(1, 9).Value = "State";
+        ws.Cell(1, 10).Value = "Country";
+        ws.Cell(1, 11).Value = "Status";
+
+        var headerRange = ws.Range(1, 1, 1, 11);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(4, 1).Value = "CompanyName: Required. Unique company name.";
+        ws.Cell(5, 1).Value = "DisplayName: Optional. Display name for the reseller.";
+        ws.Cell(6, 1).Value = "ContactPerson: Optional. Primary contact person.";
+        ws.Cell(7, 1).Value = "Email: Required. Valid email address.";
+        ws.Cell(8, 1).Value = "Mobile, Phone: Optional. Contact numbers.";
+        ws.Cell(9, 1).Value = "AddressLine1, City, State, Country: Optional. Address details.";
+        ws.Cell(10, 1).Value = "Status: 1 = Active, 0 = Inactive.";
+
+        // Example
+        ws.Cell(12, 1).Value = "Example:";
+        ws.Cell(12, 1).Style.Font.Bold = true;
+        ws.Cell(13, 1).Value = "ABC Telematics";
+        ws.Cell(13, 2).Value = "ABC";
+        ws.Cell(13, 3).Value = "Jane Smith";
+        ws.Cell(13, 4).Value = "contact@abc.com";
+        ws.Cell(13, 5).Value = "+1234567890";
+        ws.Cell(13, 6).Value = "";
+        ws.Cell(13, 7).Value = "123 Main St";
+        ws.Cell(13, 8).Value = "New York";
+        ws.Cell(13, 9).Value = "NY";
+        ws.Cell(13, 10).Value = "USA";
+        ws.Cell(13, 11).Value = 1;
+        ws.Row(13).Style.Font.Italic = true;
+        ws.Row(13).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    public Task<byte[]> GetUsersImportTemplateAsync()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Users");
+
+        // Headers
+        ws.Cell(1, 1).Value = "Username";
+        ws.Cell(1, 2).Value = "Email";
+        ws.Cell(1, 3).Value = "FullName";
+        ws.Cell(1, 4).Value = "AliasName";
+        ws.Cell(1, 5).Value = "Mobile";
+        ws.Cell(1, 6).Value = "ResellerId";
+        ws.Cell(1, 7).Value = "Password";
+        ws.Cell(1, 8).Value = "Status";
+        ws.Cell(1, 9).Value = "Roles";
+
+        var headerRange = ws.Range(1, 1, 1, 9);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(4, 1).Value = "Username: Required. Unique username for login.";
+        ws.Cell(5, 1).Value = "Email: Required. Valid email address.";
+        ws.Cell(6, 1).Value = "FullName: Required. Full name of the user.";
+        ws.Cell(7, 1).Value = "AliasName: Optional. Alias or nickname.";
+        ws.Cell(8, 1).Value = "Mobile: Optional. Mobile phone number.";
+        ws.Cell(9, 1).Value = "ResellerId: Optional. ID of the reseller this user belongs to.";
+        ws.Cell(10, 1).Value = "Password: Optional. If empty, a default password will be set.";
+        ws.Cell(11, 1).Value = "Status: 1 = Active, 0 = Inactive.";
+        ws.Cell(12, 1).Value = "Roles: Comma-separated list of role names (e.g., SUPERVISOR,TECHNICIAN).";
+
+        // Example
+        ws.Cell(14, 1).Value = "Example:";
+        ws.Cell(14, 1).Style.Font.Bold = true;
+        ws.Cell(15, 1).Value = "jane.smith";
+        ws.Cell(15, 2).Value = "jane.smith@example.com";
+        ws.Cell(15, 3).Value = "Jane Smith";
+        ws.Cell(15, 4).Value = "Jane";
+        ws.Cell(15, 5).Value = "+1234567890";
+        ws.Cell(15, 6).Value = "";
+        ws.Cell(15, 7).Value = "";
+        ws.Cell(15, 8).Value = 1;
+        ws.Cell(15, 9).Value = "SUPERVISOR";
+        ws.Row(15).Style.Font.Italic = true;
+        ws.Row(15).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
+    }
+
+    public Task<byte[]> GetRolesImportTemplateAsync()
+    {
+        using var workbook = new XLWorkbook();
+        var ws = workbook.Worksheets.Add("Roles");
+
+        // Headers
+        ws.Cell(1, 1).Value = "RoleName";
+        ws.Cell(1, 2).Value = "Description";
+        ws.Cell(1, 3).Value = "Permissions";
+
+        var headerRange = ws.Range(1, 1, 1, 3);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
+
+        // Instructions
+        ws.Cell(3, 1).Value = "Instructions:";
+        ws.Cell(3, 1).Style.Font.Bold = true;
+        ws.Cell(4, 1).Value = "RoleName: Required. Unique role name (uppercase recommended).";
+        ws.Cell(5, 1).Value = "Description: Optional. Description of the role.";
+        ws.Cell(6, 1).Value = "Permissions: Comma-separated list of permission codes.";
+
+        // Example
+        ws.Cell(8, 1).Value = "Example:";
+        ws.Cell(8, 1).Style.Font.Bold = true;
+        ws.Cell(9, 1).Value = "FIELD_TECHNICIAN";
+        ws.Cell(9, 2).Value = "Field technician with limited access";
+        ws.Cell(9, 3).Value = "VERIFY_IMEI,VIEW_DEVICES";
+        ws.Row(9).Style.Font.Italic = true;
+        ws.Row(9).Style.Font.FontColor = XLColor.Gray;
+
+        ws.Columns().AdjustToContents();
+
+        using var stream = new MemoryStream();
+        workbook.SaveAs(stream);
+        return Task.FromResult(stream.ToArray());
     }
 }

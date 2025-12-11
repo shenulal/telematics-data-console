@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, Loader2, ChevronDown, FileJson, FileSpreadsheet } from "lucide-react";
+import { Download, Upload, Loader2, ChevronDown, FileJson, FileSpreadsheet, FileDown } from "lucide-react";
 import { importExportApi } from "@/lib/api";
 
 type EntityType = "tags" | "technicians" | "resellers" | "users" | "roles";
@@ -28,6 +28,7 @@ export function ImportExportButtons({
 }: ImportExportButtonsProps) {
   const [exporting, setExporting] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [downloadingTemplate, setDownloadingTemplate] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [showImportMenu, setShowImportMenu] = useState(false);
@@ -191,6 +192,48 @@ export function ImportExportButtons({
     }
   };
 
+  const handleDownloadTemplate = async () => {
+    setShowImportMenu(false);
+    setDownloadingTemplate(true);
+    try {
+      let response;
+      switch (entityType) {
+        case "tags":
+          response = await importExportApi.downloadTagsTemplate();
+          break;
+        case "technicians":
+          response = await importExportApi.downloadTechniciansTemplate();
+          break;
+        case "resellers":
+          response = await importExportApi.downloadResellersTemplate();
+          break;
+        case "users":
+          response = await importExportApi.downloadUsersTemplate();
+          break;
+        case "roles":
+          response = await importExportApi.downloadRolesTemplate();
+          break;
+      }
+
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${entityType}_import_template.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Template download failed:", error);
+      alert("Failed to download template. Please try again.");
+    } finally {
+      setDownloadingTemplate(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2">
       {/* Export Dropdown */}
@@ -240,7 +283,7 @@ export function ImportExportButtons({
           <ChevronDown className="h-3 w-3" />
         </Button>
         {showImportMenu && (
-          <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-lg z-50 min-w-[140px]">
+          <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-lg z-50 min-w-[160px]">
             <button
               className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 text-left"
               onClick={() => handleImportClick("json")}
@@ -254,6 +297,19 @@ export function ImportExportButtons({
             >
               <FileSpreadsheet className="h-4 w-4 text-green-600" />
               Import Excel
+            </button>
+            <div className="border-t my-1"></div>
+            <button
+              className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-gray-100 text-left"
+              onClick={handleDownloadTemplate}
+              disabled={downloadingTemplate}
+            >
+              {downloadingTemplate ? (
+                <Loader2 className="h-4 w-4 text-purple-600 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4 text-purple-600" />
+              )}
+              Download Template
             </button>
           </div>
         )}

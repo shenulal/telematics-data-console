@@ -193,6 +193,24 @@ export const importExportApi = {
     });
   },
 
+  // Tag Items (ManageItems)
+  exportTagItems: (tagId: number, entityType?: number) =>
+    api.get(`/importexport/tags/${tagId}/items/export`, { params: { entityType } }),
+  exportTagItemsExcel: (tagId: number, entityType?: number) =>
+    api.get(`/importexport/tags/${tagId}/items/export/excel`, { params: { entityType }, responseType: "blob" }),
+  importTagItems: (tagId: number, entityType: number, items: { identifier: string }[]) =>
+    api.post(`/importexport/tags/${tagId}/items/import`, items, { params: { entityType } }),
+  importTagItemsExcel: (tagId: number, entityType: number, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post(`/importexport/tags/${tagId}/items/import/excel`, formData, {
+      params: { entityType },
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  downloadTagItemsTemplate: (entityType: number) =>
+    api.get("/importexport/tags/items/template", { params: { entityType }, responseType: "blob" }),
+
   // Technicians - JSON
   exportTechnicians: () => api.get("/importexport/technicians/export"),
   importTechnicians: (data: unknown[], updateExisting: boolean = false) =>
@@ -208,6 +226,8 @@ export const importExportApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  downloadTechniciansTemplate: () =>
+    api.get("/importexport/technicians/template", { responseType: "blob" }),
 
   // Resellers - JSON
   exportResellers: () => api.get("/importexport/resellers/export"),
@@ -224,6 +244,8 @@ export const importExportApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  downloadResellersTemplate: () =>
+    api.get("/importexport/resellers/template", { responseType: "blob" }),
 
   // Users - JSON
   exportUsers: () => api.get("/importexport/users/export"),
@@ -240,6 +262,8 @@ export const importExportApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  downloadUsersTemplate: () =>
+    api.get("/importexport/users/template", { responseType: "blob" }),
 
   // Roles - JSON
   exportRoles: () => api.get("/importexport/roles/export"),
@@ -256,6 +280,12 @@ export const importExportApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  downloadRolesTemplate: () =>
+    api.get("/importexport/roles/template", { responseType: "blob" }),
+
+  // Tags template
+  downloadTagsTemplate: () =>
+    api.get("/importexport/tags/template", { responseType: "blob" }),
 };
 
 // Dashboard API

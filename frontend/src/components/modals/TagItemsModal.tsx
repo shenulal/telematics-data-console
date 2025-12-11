@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { tagApi, restrictionApi, EntityType, TagItemDto, technicianApi, resellerApi, userApi } from "@/lib/api";
-import { Search, Plus, Trash2, Loader2, Info, Smartphone, User, Building2, Users } from "lucide-react";
+import { tagApi, restrictionApi, EntityType, TagItemDto, technicianApi, resellerApi, userApi, importExportApi } from "@/lib/api";
+import { Search, Plus, Trash2, Loader2, Info, Smartphone, User, Building2, Users, Download, Upload, FileSpreadsheet } from "lucide-react";
 
 interface TagInfo {
   tagId: number;
@@ -50,6 +50,9 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
   const [searchResults, setSearchResults] = useState<ExternalDevice[]>([]);
   const [entitySearchResults, setEntitySearchResults] = useState<SearchableEntity[]>([]);
   const [searching, setSearching] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchItems = async () => {
     if (!tag) return;
@@ -246,6 +249,81 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
     }
   };
 
+  // Export items to Excel
+  const handleExport = async () => {
+    if (!tag) return;
+    setExporting(true);
+    try {
+      const response = await importExportApi.exportTagItemsExcel(tag.tagId, entityType);
+      const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tag_${tag.tagId}_${getEntityTypeName(entityType).toLowerCase()}s_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Failed to export items:", error);
+      alert("Failed to export items. Please try again.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Download import template
+  const handleDownloadTemplate = async () => {
+    try {
+      const response = await importExportApi.downloadTagItemsTemplate(entityType);
+      const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `tag_items_${getEntityTypeName(entityType).toLowerCase()}_template.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Failed to download template:", error);
+      alert("Failed to download template. Please try again.");
+    }
+  };
+
+  // Import items from Excel
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !tag) return;
+
+    setImporting(true);
+    try {
+      const response = await importExportApi.importTagItemsExcel(tag.tagId, entityType, file);
+      const result = response.data;
+
+      let message = `Import completed!\n\nSuccess: ${result.successCount}\nFailed: ${result.failedCount}`;
+      if (result.errors && result.errors.length > 0) {
+        message += "\n\nErrors:";
+        result.errors.slice(0, 5).forEach((err: { rowNumber: number; identifier?: string; errorMessage: string }) => {
+          message += `\nRow ${err.rowNumber}: ${err.identifier || ""} - ${err.errorMessage}`;
+        });
+        if (result.errors.length > 5) {
+          message += `\n... and ${result.errors.length - 5} more errors`;
+        }
+      }
+      alert(message);
+      fetchItems();
+    } catch (error) {
+      console.error("Failed to import items:", error);
+      alert("Failed to import items. Please check the file format and try again.");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={() => onClose()}>
       <DialogContent className="max-w-3xl" onClose={() => onClose()}>
@@ -256,10 +334,19 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
           </DialogTitle>
         </DialogHeader>
         
+        {/* Hidden file input for import */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleImport}
+          accept=".xlsx,.xls"
+          className="hidden"
+        />
+
         <div className="px-6 py-4 space-y-4">
-          {/* Entity Type Filter */}
-          <div className="flex gap-4 items-end">
-            <div className="flex-1">
+          {/* Entity Type Filter and Import/Export Buttons */}
+          <div className="flex gap-4 items-end flex-wrap">
+            <div className="flex-1 min-w-[200px]">
               <Label>Entity Type</Label>
               <Select value={entityType.toString()} onChange={(e) => setEntityType(parseInt(e.target.value))}>
                 <option value={EntityType.Device}>Devices</option>
@@ -267,6 +354,45 @@ export function TagItemsModal({ open, tag, onClose }: Props) {
                 <option value={EntityType.Reseller}>Resellers</option>
                 <option value={EntityType.User}>Users</option>
               </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                title="Download import template"
+              >
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                Template
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                title="Import items from Excel"
+              >
+                {importing ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4 mr-1" />
+                )}
+                Import
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExport}
+                disabled={exporting || items.length === 0}
+                title="Export items to Excel"
+              >
+                {exporting ? (
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4 mr-1" />
+                )}
+                Export
+              </Button>
             </div>
           </div>
 

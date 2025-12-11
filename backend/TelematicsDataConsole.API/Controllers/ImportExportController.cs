@@ -60,6 +60,93 @@ public class ImportExportController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Download import template for tags
+    /// </summary>
+    [HttpGet("tags/template")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<IActionResult> GetTagsTemplate()
+    {
+        var bytes = await _importExportService.GetTagsImportTemplateAsync();
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "tags_import_template.xlsx");
+    }
+
+    // ============ TAG ITEMS (ManageItems) ============
+
+    /// <summary>
+    /// Export items for a specific tag
+    /// </summary>
+    [HttpGet("tags/{tagId}/items/export")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<ActionResult<List<ExportTagItemDetailDto>>> ExportTagItems(int tagId, [FromQuery] short? entityType = null)
+    {
+        var items = await _importExportService.ExportTagItemsAsync(tagId, entityType);
+        return Ok(items);
+    }
+
+    /// <summary>
+    /// Export tag items to Excel
+    /// </summary>
+    [HttpGet("tags/{tagId}/items/export/excel")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<IActionResult> ExportTagItemsExcel(int tagId, [FromQuery] short? entityType = null)
+    {
+        var bytes = await _importExportService.ExportTagItemsToExcelAsync(tagId, entityType);
+        var entityTypeName = entityType.HasValue ? GetEntityTypeName(entityType.Value) : "all";
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"tag_{tagId}_{entityTypeName}_items_{DateTime.Now:yyyyMMdd}.xlsx");
+    }
+
+    /// <summary>
+    /// Import tag items using identifiers (IMEI for devices, username for users, etc.)
+    /// The system will automatically look up the corresponding IDs
+    /// </summary>
+    [HttpPost("tags/{tagId}/items/import")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<ActionResult<ImportResultDto>> ImportTagItems(int tagId, [FromQuery] short entityType, [FromBody] List<ImportTagItemByIdentifierDto> items)
+    {
+        if (items == null || items.Count == 0)
+            return BadRequest("No items provided");
+
+        var result = await _importExportService.ImportTagItemsByIdentifierAsync(tagId, entityType, items);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Import tag items from Excel file
+    /// </summary>
+    [HttpPost("tags/{tagId}/items/import/excel")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<ActionResult<ImportResultDto>> ImportTagItemsExcel(int tagId, [FromQuery] short entityType, IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+            return BadRequest("No file provided");
+
+        using var stream = file.OpenReadStream();
+        var result = await _importExportService.ImportTagItemsFromExcelAsync(tagId, entityType, stream);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Download import template for tag items
+    /// </summary>
+    [HttpGet("tags/items/template")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<IActionResult> GetTagItemsTemplate([FromQuery] short entityType = 1)
+    {
+        var bytes = await _importExportService.GetTagItemsImportTemplateAsync(entityType);
+        var entityTypeName = GetEntityTypeName(entityType);
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", $"tag_items_{entityTypeName}_template.xlsx");
+    }
+
+    private static string GetEntityTypeName(short entityType) => entityType switch
+    {
+        1 => "devices",
+        2 => "technicians",
+        3 => "resellers",
+        4 => "users",
+        _ => "items"
+    };
+
     // ============ TECHNICIANS ============
 
     [HttpGet("technicians/export")]
@@ -99,6 +186,17 @@ public class ImportExportController : ControllerBase
         using var stream = file.OpenReadStream();
         var result = await _importExportService.ImportTechniciansFromExcelAsync(stream, updateExisting);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Download import template for technicians
+    /// </summary>
+    [HttpGet("technicians/template")]
+    [Authorize(Roles = "SUPERADMIN,RESELLER ADMIN")]
+    public async Task<IActionResult> GetTechniciansTemplate()
+    {
+        var bytes = await _importExportService.GetTechniciansImportTemplateAsync();
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "technicians_import_template.xlsx");
     }
 
     // ============ RESELLERS ============
@@ -142,6 +240,17 @@ public class ImportExportController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Download import template for resellers
+    /// </summary>
+    [HttpGet("resellers/template")]
+    [Authorize(Roles = "SUPERADMIN")]
+    public async Task<IActionResult> GetResellersTemplate()
+    {
+        var bytes = await _importExportService.GetResellersImportTemplateAsync();
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "resellers_import_template.xlsx");
+    }
+
     // ============ USERS ============
 
     [HttpGet("users/export")]
@@ -183,6 +292,17 @@ public class ImportExportController : ControllerBase
         return Ok(result);
     }
 
+    /// <summary>
+    /// Download import template for users
+    /// </summary>
+    [HttpGet("users/template")]
+    [Authorize(Roles = "SUPERADMIN")]
+    public async Task<IActionResult> GetUsersTemplate()
+    {
+        var bytes = await _importExportService.GetUsersImportTemplateAsync();
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "users_import_template.xlsx");
+    }
+
     // ============ ROLES ============
 
     [HttpGet("roles/export")]
@@ -222,6 +342,17 @@ public class ImportExportController : ControllerBase
         using var stream = file.OpenReadStream();
         var result = await _importExportService.ImportRolesFromExcelAsync(stream, updateExisting);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Download import template for roles
+    /// </summary>
+    [HttpGet("roles/template")]
+    [Authorize(Roles = "SUPERADMIN")]
+    public async Task<IActionResult> GetRolesTemplate()
+    {
+        var bytes = await _importExportService.GetRolesImportTemplateAsync();
+        return File(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "roles_import_template.xlsx");
     }
 }
 
