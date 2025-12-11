@@ -21,7 +21,6 @@ public class ImeiRestrictionService : IImeiRestrictionService
     public async Task<PagedResult<ImeiRestrictionDto>> GetByTechnicianAsync(int technicianId, int page = 1, int pageSize = 20)
     {
         var query = _context.ImeiRestrictions
-            .Include(r => r.Technician).ThenInclude(t => t.User)
             .Include(r => r.Tag)
             .Where(r => r.TechnicianId == technicianId);
 
@@ -34,7 +33,29 @@ public class ImeiRestrictionService : IImeiRestrictionService
             .Take(pageSize)
             .ToListAsync();
 
-        var items = entities.Select(r => MapToDto(r)).ToList();
+        // Fetch technician separately to avoid complex include chain
+        var technician = await _context.Technicians
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TechnicianId == technicianId);
+
+        var items = entities.Select(r => new ImeiRestrictionDto
+        {
+            RestrictionId = r.RestrictionId,
+            TechnicianId = r.TechnicianId,
+            TechnicianName = technician?.User?.FullName ?? technician?.User?.Username,
+            DeviceId = r.DeviceId,
+            TagId = r.TagId,
+            TagName = r.Tag?.TagName,
+            AccessType = r.AccessType,
+            Priority = r.Priority,
+            Reason = r.Reason,
+            IsPermanent = r.IsPermanent,
+            ValidFrom = r.ValidFrom,
+            ValidUntil = r.ValidUntil,
+            Notes = r.Notes,
+            Status = r.Status,
+            CreatedAt = r.CreatedAt
+        }).ToList();
 
         return new PagedResult<ImeiRestrictionDto>
         {
@@ -136,13 +157,34 @@ public class ImeiRestrictionService : IImeiRestrictionService
         var now = DateTime.UtcNow;
         var entities = await _context.ImeiRestrictions
             .Include(r => r.Tag)
-            .Include(r => r.Technician).ThenInclude(t => t.User)
             .Where(r => r.TechnicianId == technicianId &&
                        r.Status == (int)RestrictionStatus.Active &&
                        (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
             .ToListAsync();
 
-        return entities.Select(r => MapToDto(r)).ToList();
+        // Fetch technician separately to avoid complex include chain
+        var technician = await _context.Technicians
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.TechnicianId == technicianId);
+
+        return entities.Select(r => new ImeiRestrictionDto
+        {
+            RestrictionId = r.RestrictionId,
+            TechnicianId = r.TechnicianId,
+            TechnicianName = technician?.User?.FullName ?? technician?.User?.Username,
+            DeviceId = r.DeviceId,
+            TagId = r.TagId,
+            TagName = r.Tag?.TagName,
+            AccessType = r.AccessType,
+            Priority = r.Priority,
+            Reason = r.Reason,
+            IsPermanent = r.IsPermanent,
+            ValidFrom = r.ValidFrom,
+            ValidUntil = r.ValidUntil,
+            Notes = r.Notes,
+            Status = r.Status,
+            CreatedAt = r.CreatedAt
+        }).ToList();
     }
 
     private static ImeiRestrictionDto MapToDto(ImeiRestriction r) => new()
