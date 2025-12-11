@@ -27,12 +27,14 @@ public class ImeiRestrictionService : IImeiRestrictionService
 
         var totalCount = await query.CountAsync();
 
-        var items = await query
+        // Materialize entities first, then map to DTO
+        var entities = await query
             .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(r => MapToDto(r))
             .ToListAsync();
+
+        var items = entities.Select(r => MapToDto(r)).ToList();
 
         return new PagedResult<ImeiRestrictionDto>
         {
@@ -132,13 +134,15 @@ public class ImeiRestrictionService : IImeiRestrictionService
     public async Task<IEnumerable<ImeiRestrictionDto>> GetActiveRestrictionsAsync(int technicianId)
     {
         var now = DateTime.UtcNow;
-        return await _context.ImeiRestrictions
+        var entities = await _context.ImeiRestrictions
             .Include(r => r.Tag)
+            .Include(r => r.Technician).ThenInclude(t => t.User)
             .Where(r => r.TechnicianId == technicianId &&
                        r.Status == (int)RestrictionStatus.Active &&
                        (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
-            .Select(r => MapToDto(r))
             .ToListAsync();
+
+        return entities.Select(r => MapToDto(r)).ToList();
     }
 
     private static ImeiRestrictionDto MapToDto(ImeiRestriction r) => new()
