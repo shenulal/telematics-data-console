@@ -96,7 +96,7 @@ public class ImeiRestrictionService : IImeiRestrictionService
             ValidFrom = dto.ValidFrom ?? DateTime.UtcNow,
             ValidUntil = dto.ValidUntil,
             Notes = dto.Notes,
-            Status = (int)RestrictionStatus.Active,
+            Status = (short)RestrictionStatus.Active,
             CreatedBy = createdBy,
             UpdatedBy = createdBy
         };
@@ -153,8 +153,8 @@ public class ImeiRestrictionService : IImeiRestrictionService
         return await _context.ImeiRestrictions.AnyAsync(r =>
             r.TechnicianId == technicianId &&
             r.DeviceId == deviceId &&
-            r.Status == (int)RestrictionStatus.Active &&
-            r.AccessType == (int)AccessType.Deny &&
+            r.Status == (short)RestrictionStatus.Active &&
+            r.AccessType == (short)AccessType.Deny &&
             (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)));
     }
 
@@ -163,7 +163,7 @@ public class ImeiRestrictionService : IImeiRestrictionService
         var now = DateTime.UtcNow;
         var entities = await _context.ImeiRestrictions
             .Where(r => r.TechnicianId == technicianId &&
-                       r.Status == (int)RestrictionStatus.Active &&
+                       r.Status == (short)RestrictionStatus.Active &&
                        (r.IsPermanent == true || (r.ValidFrom <= now && r.ValidUntil >= now)))
             .ToListAsync();
 
