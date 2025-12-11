@@ -22,5 +22,13 @@ public class AuditFilterDto : FilterBase
     public string? EntityType { get; set; }
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
+    public string? Username { get; set; }
+}
+
+public class AuditUserDto
+{
+    public int UserId { get; set; }
+    public string Username { get; set; } = string.Empty;
+    public string? FullName { get; set; }
 }
 

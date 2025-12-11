@@ -171,14 +171,17 @@ public class RoleService : IRoleService
         return (await GetByIdAsync(id))!;
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
     {
         var role = await _context.Roles.FindAsync(id);
         if (role == null) return false;
         if (role.IsSystemRole) throw new InvalidOperationException("Cannot delete system roles");
 
+        var oldValues = new { role.RoleId, role.RoleName, role.Description };
         _context.Roles.Remove(role);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(deletedBy, AuditActions.Delete, "Role", id.ToString(), oldValues, null);
         return true;
     }
 

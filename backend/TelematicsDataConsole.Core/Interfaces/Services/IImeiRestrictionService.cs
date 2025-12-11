@@ -9,7 +9,7 @@ public interface IImeiRestrictionService
     Task<ImeiRestrictionDto?> GetByIdAsync(int id);
     Task<ImeiRestrictionDto> CreateAsync(CreateImeiRestrictionDto dto, int createdBy);
     Task<ImeiRestrictionDto> UpdateAsync(int id, UpdateImeiRestrictionDto dto, int updatedBy);
-    Task<bool> DeleteAsync(int id);
+    Task<bool> DeleteAsync(int id, int deletedBy = 0);
     Task<bool> IsDeviceRestrictedAsync(int technicianId, int deviceId);
     Task<IEnumerable<ImeiRestrictionDto>> GetActiveRestrictionsAsync(int technicianId);
 }

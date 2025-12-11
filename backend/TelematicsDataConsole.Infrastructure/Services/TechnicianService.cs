@@ -163,10 +163,15 @@ public class TechnicianService : ITechnicianService
     {
         var technician = await _context.Technicians.FindAsync(id);
         if (technician == null) return false;
+
+        var oldStatus = technician.Status;
         technician.Status = (short)status;
         technician.UpdatedBy = updatedBy;
         technician.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(updatedBy, AuditActions.Update, "Technician", id.ToString(),
+            new { Status = oldStatus }, new { Status = (short)status });
         return true;
     }
 

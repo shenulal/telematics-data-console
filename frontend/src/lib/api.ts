@@ -121,6 +121,8 @@ export const auditApi = {
   getLogs: (params?: AuditFilter) => api.get("/audit/logs", { params }),
   getUserActivity: (userId: number, from?: string, to?: string) =>
     api.get(`/audit/user/${userId}/activity`, { params: { from, to } }),
+  getActions: () => api.get("/audit/actions"),
+  getUsers: () => api.get("/audit/users"),
 };
 
 // Users API
@@ -373,6 +375,7 @@ export interface UpdateRestrictionDto {
 
 export interface AuditFilter {
   userId?: number;
+  username?: string;
   action?: string;
   entityType?: string;
   fromDate?: string;

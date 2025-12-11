@@ -119,11 +119,12 @@ public class ImeiRestrictionsController : ControllerBase
     [RequirePermission(Permissions.ImeiRestrictionManage)]
     public async Task<IActionResult> Delete(int id)
     {
-        var result = await _restrictionService.DeleteAsync(id);
+        var userId = GetCurrentUserId();
+        var result = await _restrictionService.DeleteAsync(id, userId);
         if (!result)
             return NotFound(new { message = "Restriction not found" });
 
-        _logger.LogInformation("IMEI restriction deleted: {RestrictionId} by user {UserId}", id, GetCurrentUserId());
+        _logger.LogInformation("IMEI restriction deleted: {RestrictionId} by user {UserId}", id, userId);
         return Ok(new { message = "Restriction deleted successfully" });
     }
 

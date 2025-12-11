@@ -144,7 +144,7 @@ public class RolesController : ControllerBase
             if (!await _roleService.CanAccessRoleAsync(id, userId, resellerId))
                 return Forbid();
 
-            var result = await _roleService.DeleteAsync(id);
+            var result = await _roleService.DeleteAsync(id, userId);
             if (!result)
                 return NotFound(new { message = "Role not found" });
 

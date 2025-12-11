@@ -120,7 +120,8 @@ public class TagsController : ControllerBase
             }
         }
 
-        var result = await _tagService.DeleteAsync(id);
+        var userId = GetCurrentUserId();
+        var result = await _tagService.DeleteAsync(id, userId);
         if (!result)
             return NotFound(new { message = "Tag not found" });
 

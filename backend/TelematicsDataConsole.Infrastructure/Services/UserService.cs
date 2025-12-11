@@ -298,14 +298,18 @@ public class UserService : IUserService
         return (await GetByIdAsync(id))!;
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
     {
         var user = await _context.Users.FindAsync(id);
         if (user == null) return false;
 
+        var oldValues = new { user.UserId, user.Username, user.Email, user.Status };
         user.Status = (short)UserStatus.Deleted;
+        user.UpdatedBy = deletedBy;
         user.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(deletedBy, AuditActions.Delete, "User", id.ToString(), oldValues, null);
         return true;
     }
 

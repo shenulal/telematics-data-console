@@ -11,5 +11,7 @@ public interface IAuditService
     Task<PagedResult<AuditLogDto>> GetLogsAsync(AuditFilterDto filter);
     Task<IEnumerable<AuditLogDto>> GetUserActivityAsync(int userId, DateTime? from = null, DateTime? to = null);
     Task<IEnumerable<AuditLogDto>> GetEntityHistoryAsync(string entityType, string entityId);
+    Task<IEnumerable<string>> GetUniqueActionsAsync();
+    Task<IEnumerable<AuditUserDto>> GetUsersForFilterAsync();
 }
 

@@ -113,7 +113,8 @@ public class UsersController : ControllerBase
         if (!await CanAccessUserAsync(id))
             return Forbid();
 
-        var result = await _userService.DeleteAsync(id);
+        var currentUserId = GetCurrentUserId();
+        var result = await _userService.DeleteAsync(id, currentUserId);
         if (!result)
             return NotFound(new { message = "User not found" });
 

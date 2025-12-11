@@ -70,6 +70,9 @@ public class AuditService : IAuditService
         if (filter.UserId.HasValue)
             query = query.Where(a => a.UserId == filter.UserId);
 
+        if (!string.IsNullOrEmpty(filter.Username))
+            query = query.Where(a => a.Username != null && a.Username.Contains(filter.Username));
+
         if (!string.IsNullOrEmpty(filter.Action))
             query = query.Where(a => a.Action == filter.Action);
 
@@ -80,7 +83,11 @@ public class AuditService : IAuditService
             query = query.Where(a => a.CreatedAt >= filter.FromDate);
 
         if (filter.ToDate.HasValue)
-            query = query.Where(a => a.CreatedAt <= filter.ToDate);
+        {
+            // Add 1 day to include the entire end date
+            var toDateEnd = filter.ToDate.Value.Date.AddDays(1);
+            query = query.Where(a => a.CreatedAt < toDateEnd);
+        }
 
         var totalCount = await query.CountAsync();
 
@@ -154,5 +161,27 @@ public class AuditService : IAuditService
             })
             .ToListAsync();
     }
-}
 
+    public async Task<IEnumerable<string>> GetUniqueActionsAsync()
+    {
+        return await _context.AuditLogs
+            .Select(a => a.Action)
+            .Distinct()
+            .OrderBy(a => a)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<AuditUserDto>> GetUsersForFilterAsync()
+    {
+        return await _context.Users
+            .Where(u => u.Status == 1)
+            .OrderBy(u => u.Username)
+            .Select(u => new AuditUserDto
+            {
+                UserId = u.UserId,
+                Username = u.Username,
+                FullName = u.FullName
+            })
+            .ToListAsync();
+    }
+}

@@ -153,10 +153,15 @@ public class ResellerService : IResellerService
     {
         var reseller = await _context.Resellers.FindAsync(id);
         if (reseller == null) return false;
+
+        var oldStatus = reseller.Status;
         reseller.Status = (short)ResellerStatus.Inactive;
         reseller.UpdatedBy = updatedBy;
         reseller.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(updatedBy, AuditActions.Update, "Reseller", id.ToString(),
+            new { Status = oldStatus }, new { Status = (short)ResellerStatus.Inactive });
         return true;
     }
 
@@ -164,10 +169,15 @@ public class ResellerService : IResellerService
     {
         var reseller = await _context.Resellers.FindAsync(id);
         if (reseller == null) return false;
+
+        var oldStatus = reseller.Status;
         reseller.Status = (short)ResellerStatus.Active;
         reseller.UpdatedBy = updatedBy;
         reseller.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(updatedBy, AuditActions.Update, "Reseller", id.ToString(),
+            new { Status = oldStatus }, new { Status = (short)ResellerStatus.Active });
         return true;
     }
 

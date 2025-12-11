@@ -136,13 +136,16 @@ public class TagService : ITagService
         return (await GetByIdAsync(id))!;
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
     {
         var tag = await _context.Tags.FindAsync(id);
         if (tag == null) return false;
 
+        var oldValues = new { tag.TagId, tag.TagName, tag.Description, tag.Scope };
         _context.Tags.Remove(tag);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(deletedBy, AuditActions.Delete, "Tag", id.ToString(), oldValues, null);
         return true;
     }
 

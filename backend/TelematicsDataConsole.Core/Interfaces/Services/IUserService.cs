@@ -10,7 +10,7 @@ public interface IUserService
     Task<UserDto?> GetByUsernameAsync(string username);
     Task<UserDto> CreateAsync(CreateUserDto dto, int createdBy);
     Task<UserDto> UpdateAsync(int id, UpdateUserDto dto, int updatedBy);
-    Task<bool> DeleteAsync(int id);
+    Task<bool> DeleteAsync(int id, int deletedBy = 0);
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto);
     Task<bool> ResetPasswordAsync(int userId, ResetPasswordDto dto, int adminId);
     Task<List<UserDto>> GetByResellerIdAsync(int resellerId);

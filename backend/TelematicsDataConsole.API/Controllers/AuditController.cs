@@ -51,5 +51,27 @@ public class AuditController : ControllerBase
         var history = await _auditService.GetEntityHistoryAsync(entityType, entityId);
         return Ok(history);
     }
+
+    /// <summary>
+    /// Get unique actions for filter dropdown
+    /// </summary>
+    [HttpGet("actions")]
+    [RequirePermission(Permissions.AuditLogView)]
+    public async Task<IActionResult> GetUniqueActions()
+    {
+        var actions = await _auditService.GetUniqueActionsAsync();
+        return Ok(actions);
+    }
+
+    /// <summary>
+    /// Get users for filter dropdown
+    /// </summary>
+    [HttpGet("users")]
+    [RequirePermission(Permissions.AuditLogView)]
+    public async Task<IActionResult> GetUsersForFilter()
+    {
+        var users = await _auditService.GetUsersForFilterAsync();
+        return Ok(users);
+    }
 }
 

@@ -9,7 +9,7 @@ public interface IRoleService
     Task<RoleDto?> GetByNameAsync(string name);
     Task<RoleDto> CreateAsync(CreateRoleDto dto, int createdBy, int? resellerId = null);
     Task<RoleDto> UpdateAsync(int id, UpdateRoleDto dto, int updatedBy);
-    Task<bool> DeleteAsync(int id);
+    Task<bool> DeleteAsync(int id, int deletedBy = 0);
     Task<bool> AssignPermissionsAsync(int roleId, List<int> permissionIds, int updatedBy);
     Task<List<PermissionDto>> GetUserPermissionsAsync(int userId);
     Task<bool> CanAccessRoleAsync(int roleId, int userId, int? resellerId);

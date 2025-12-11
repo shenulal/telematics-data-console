@@ -9,7 +9,7 @@ public interface ITagService
     Task<TagDto?> GetByIdAsync(int id);
     Task<TagDto> CreateAsync(CreateTagDto dto, int createdBy);
     Task<TagDto> UpdateAsync(int id, UpdateTagDto dto, int updatedBy);
-    Task<bool> DeleteAsync(int id);
+    Task<bool> DeleteAsync(int id, int deletedBy = 0);
     Task<List<TagDto>> GetByResellerIdAsync(int resellerId);
     Task<List<TagDto>> GetByUserIdAsync(int userId);
 

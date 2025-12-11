@@ -105,13 +105,16 @@ public class ImeiRestrictionService : IImeiRestrictionService
         return (await GetByIdAsync(id))!;
     }
 
-    public async Task<bool> DeleteAsync(int id)
+    public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
     {
         var restriction = await _context.ImeiRestrictions.FindAsync(id);
         if (restriction == null) return false;
 
+        var oldValues = new { restriction.RestrictionId, restriction.TechnicianId, restriction.DeviceId, restriction.AccessType };
         _context.ImeiRestrictions.Remove(restriction);
         await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(deletedBy, AuditActions.Delete, "ImeiRestriction", id.ToString(), oldValues, null);
         return true;
     }
 
