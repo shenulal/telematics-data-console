@@ -2,6 +2,7 @@
 
 import {
   useVerificationStore,
+  useAuthStore,
   LiveDeviceData,
   VerificationSnapshot,
   COMMON_COMMENTS,
@@ -56,6 +57,7 @@ function StatusBadge({ status }: { status: string | unknown }) {
 
 export function DeviceDataDisplay() {
   const { deviceData, liveDeviceData, currentImei, reset, setLiveDeviceData, setLoading } = useVerificationStore();
+  const { user } = useAuthStore();
   const [snapshots, setSnapshots] = useState<VerificationSnapshot[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -66,6 +68,16 @@ export function DeviceDataDisplay() {
   const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
   const [noNewDataMessage, setNoNewDataMessage] = useState("");
   const router = useRouter();
+
+  // Check if user is a technician (not admin roles)
+  const isTechnician = user?.roles?.includes("TECHNICIAN") && user?.technicianId;
+  const isSuperAdmin = user?.roles?.includes("SUPERADMIN");
+  const isResellerAdmin = user?.roles?.includes("RESELLER ADMIN");
+  const isSupervisor = user?.roles?.includes("SUPERVISOR");
+  const isAdminUser = isSuperAdmin || isResellerAdmin || isSupervisor;
+
+  // Only technicians can complete verification, not admin users
+  const canCompleteVerification = isTechnician && !isAdminUser;
 
   // Load snapshots from localStorage on mount
   useEffect(() => {
@@ -398,7 +410,7 @@ export function DeviceDataDisplay() {
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? 'Refreshing...' : 'Refresh'}
           </Button>
-          {snapshots.length > 0 && !showCompleteDialog && (
+          {canCompleteVerification && snapshots.length > 0 && !showCompleteDialog && (
             <Button
               onClick={() => setShowCompleteDialog(true)}
               size="sm"
@@ -410,8 +422,8 @@ export function DeviceDataDisplay() {
         </div>
       </div>
 
-      {/* Complete Verification Dialog - Shown at top when active */}
-      {showCompleteDialog && (
+      {/* Complete Verification Dialog - Shown at top when active (only for technicians) */}
+      {canCompleteVerification && showCompleteDialog && (
         <Card className="border-2 border-blue-200 bg-blue-50/30">
           <CardHeader className="pb-2">
             <CardTitle className="text-base flex items-center gap-2">
