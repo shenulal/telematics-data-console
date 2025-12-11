@@ -34,8 +34,18 @@ public class ImeiRestrictionsController : ControllerBase
     [RequirePermission(Permissions.ImeiRestrictionManage)]
     public async Task<IActionResult> GetByTechnician(int technicianId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
     {
-        var result = await _restrictionService.GetByTechnicianAsync(technicianId, page, pageSize);
-        return Ok(result);
+        try
+        {
+            _logger.LogInformation("GetByTechnician called for technicianId: {TechnicianId}, page: {Page}, pageSize: {PageSize}", technicianId, page, pageSize);
+            var result = await _restrictionService.GetByTechnicianAsync(technicianId, page, pageSize);
+            _logger.LogInformation("GetByTechnician returned {Count} items for technicianId: {TechnicianId}", result.Items.Count(), technicianId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in GetByTechnician for technicianId: {TechnicianId}. Message: {Message}, StackTrace: {StackTrace}", technicianId, ex.Message, ex.StackTrace);
+            return StatusCode(500, new { message = "An unexpected error occurred", error = ex.Message, stackTrace = ex.StackTrace });
+        }
     }
 
     /// <summary>
