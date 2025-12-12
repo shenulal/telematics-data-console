@@ -30,6 +30,8 @@ export function getStatusColor(status: number): string {
       return "bg-yellow-100 text-yellow-800";
     case 3:
       return "bg-orange-100 text-orange-800";
+    case 4:
+      return "bg-gray-200 text-gray-600";
     default:
       return "bg-gray-100 text-gray-800";
   }
@@ -45,6 +47,8 @@ export function getStatusText(status: number): string {
       return "SUSPENDED";
     case 3:
       return "LOCKED";
+    case 4:
+      return "DELETED";
     default:
       return "UNKNOWN";
   }
@@ -99,5 +103,6 @@ export const USER_STATUS = {
   ACTIVE: 1,
   SUSPENDED: 2,
   LOCKED: 3,
+  DELETED: 4,
 } as const;
 

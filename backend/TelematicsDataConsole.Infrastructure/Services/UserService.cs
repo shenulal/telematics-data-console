@@ -37,8 +37,11 @@ public class UserService : IUserService
             query = query.Where(u => !u.UserRoles.Any(ur => ur.Role.RoleName == SystemRoles.SuperAdmin));
         }
 
+        // Filter by status if specified, otherwise exclude deleted users by default
         if (status.HasValue)
             query = query.Where(u => u.Status == status.Value);
+        else
+            query = query.Where(u => u.Status != (short)UserStatus.Deleted);
 
         if (!string.IsNullOrEmpty(search))
         {
