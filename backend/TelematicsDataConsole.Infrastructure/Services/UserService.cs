@@ -218,6 +218,17 @@ public class UserService : IUserService
         var user = await _context.Users.Include(u => u.UserRoles).FirstOrDefaultAsync(u => u.UserId == id)
             ?? throw new KeyNotFoundException("User not found");
 
+        // Capture old values for audit log
+        var oldValues = new
+        {
+            user.Username,
+            user.Email,
+            user.FullName,
+            user.Status,
+            user.ResellerId,
+            user.Mobile
+        };
+
         if (dto.Email != null && dto.Email != user.Email)
         {
             if (await _context.Users.AnyAsync(u => u.Email == dto.Email && u.UserId != id))
@@ -297,7 +308,18 @@ public class UserService : IUserService
             }
         }
 
-        await _auditService.LogAsync(updatedBy, AuditActions.Update, "User", id.ToString());
+        // Capture new values for audit log
+        var newValues = new
+        {
+            user.Username,
+            user.Email,
+            user.FullName,
+            user.Status,
+            user.ResellerId,
+            user.Mobile
+        };
+
+        await _auditService.LogAsync(updatedBy, AuditActions.Update, "User", id.ToString(), oldValues, newValues);
         return (await GetByIdAsync(id))!;
     }
 

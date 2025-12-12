@@ -114,6 +114,22 @@ public class ImeiRestrictionService : IImeiRestrictionService
         var restriction = await _context.ImeiRestrictions.FindAsync(id)
             ?? throw new KeyNotFoundException("Restriction not found");
 
+        // Get IMEI for the restriction for audit logging (DeviceId is stored but IMEI comes from external service)
+        var fullRestriction = await GetByIdAsync(id);
+        var oldImei = fullRestriction?.DeviceImei;
+
+        // Capture old values for audit log
+        var oldValues = new
+        {
+            restriction.RestrictionId,
+            restriction.TechnicianId,
+            restriction.DeviceId,
+            Imei = oldImei,
+            restriction.AccessType,
+            restriction.Status,
+            restriction.Reason
+        };
+
         if (dto.DeviceId.HasValue) restriction.DeviceId = dto.DeviceId;
         if (dto.TagId.HasValue) restriction.TagId = dto.TagId;
         if (dto.AccessType.HasValue) restriction.AccessType = dto.AccessType;
@@ -129,9 +145,23 @@ public class ImeiRestrictionService : IImeiRestrictionService
         restriction.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
-        await _auditService.LogAsync(updatedBy, AuditActions.Update, "ImeiRestriction", id.ToString());
 
-        return (await GetByIdAsync(id))!;
+        // Get updated restriction for new IMEI value
+        var updatedRestriction = await GetByIdAsync(id);
+        var newValues = new
+        {
+            restriction.RestrictionId,
+            restriction.TechnicianId,
+            restriction.DeviceId,
+            Imei = updatedRestriction?.DeviceImei,
+            restriction.AccessType,
+            restriction.Status,
+            restriction.Reason
+        };
+
+        await _auditService.LogAsync(updatedBy, AuditActions.Update, "ImeiRestriction", id.ToString(), oldValues, newValues);
+
+        return updatedRestriction!;
     }
 
     public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
@@ -139,7 +169,18 @@ public class ImeiRestrictionService : IImeiRestrictionService
         var restriction = await _context.ImeiRestrictions.FindAsync(id);
         if (restriction == null) return false;
 
-        var oldValues = new { restriction.RestrictionId, restriction.TechnicianId, restriction.DeviceId, restriction.AccessType };
+        // Get the full DTO to capture IMEI for audit log
+        var fullRestriction = await GetByIdAsync(id);
+
+        var oldValues = new
+        {
+            restriction.RestrictionId,
+            restriction.TechnicianId,
+            restriction.DeviceId,
+            Imei = fullRestriction?.DeviceImei,
+            restriction.AccessType,
+            restriction.Reason
+        };
         _context.ImeiRestrictions.Remove(restriction);
         await _context.SaveChangesAsync();
 

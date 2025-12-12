@@ -80,7 +80,8 @@ public class AuthService : IAuthService
         var accessToken = GenerateJwtToken(user, roles, permissions);
         var refreshToken = GenerateRefreshToken();
 
-        await _auditService.LogAsync(user.UserId, AuditActions.Login, "User", user.UserId.ToString());
+        await _auditService.LogAsync(user.UserId, AuditActions.Login, "User", user.UserId.ToString(), null,
+            new { user.Username, user.Email, user.FullName, Roles = string.Join(", ", roles) });
 
         return new AuthResult
         {
