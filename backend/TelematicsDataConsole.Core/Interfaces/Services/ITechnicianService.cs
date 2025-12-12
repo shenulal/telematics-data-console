@@ -10,6 +10,7 @@ public interface ITechnicianService
     Task<TechnicianDto?> GetByUserIdAsync(int userId);
     Task<TechnicianDto> CreateAsync(CreateTechnicianDto dto, int createdBy);
     Task<TechnicianDto> UpdateAsync(int id, UpdateTechnicianDto dto, int updatedBy);
+    Task<bool> DeleteAsync(int id, int deletedBy);
     Task<bool> DeactivateAsync(int id, int updatedBy);
     Task<bool> ActivateAsync(int id, int updatedBy);
     Task<IEnumerable<TechnicianDto>> GetByResellerAsync(int resellerId);

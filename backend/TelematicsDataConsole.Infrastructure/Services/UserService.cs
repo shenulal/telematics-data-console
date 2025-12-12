@@ -303,13 +303,49 @@ public class UserService : IUserService
 
     public async Task<bool> DeleteAsync(int id, int deletedBy = 0)
     {
-        var user = await _context.Users.FindAsync(id);
+        var user = await _context.Users
+            .Include(u => u.Technician)
+            .Include(u => u.UserRoles)
+            .FirstOrDefaultAsync(u => u.UserId == id);
         if (user == null) return false;
 
         var oldValues = new { user.UserId, user.Username, user.Email, user.Status };
-        user.Status = (short)UserStatus.Deleted;
-        user.UpdatedBy = deletedBy;
-        user.UpdatedAt = DateTime.UtcNow;
+
+        // If user is a technician, delete technician record and related IMEI restrictions
+        if (user.Technician != null)
+        {
+            var technicianId = user.Technician.TechnicianId;
+
+            // Delete IMEI restrictions for this technician
+            var restrictions = await _context.ImeiRestrictions
+                .Where(r => r.TechnicianId == technicianId)
+                .ToListAsync();
+            if (restrictions.Any())
+            {
+                _context.ImeiRestrictions.RemoveRange(restrictions);
+            }
+
+            // Delete verification logs for this technician
+            var verificationLogs = await _context.VerificationLogs
+                .Where(v => v.TechnicianId == technicianId)
+                .ToListAsync();
+            if (verificationLogs.Any())
+            {
+                _context.VerificationLogs.RemoveRange(verificationLogs);
+            }
+
+            // Delete technician record
+            _context.Technicians.Remove(user.Technician);
+        }
+
+        // Delete user roles
+        if (user.UserRoles.Any())
+        {
+            _context.UserRoles.RemoveRange(user.UserRoles);
+        }
+
+        // Hard delete the user
+        _context.Users.Remove(user);
         await _context.SaveChangesAsync();
 
         await _auditService.LogAsync(deletedBy, AuditActions.Delete, "User", id.ToString(), oldValues, null);

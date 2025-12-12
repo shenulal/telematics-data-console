@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { technicianApi } from "@/lib/api";
 import { formatDate, getStatusColor, getStatusText } from "@/lib/utils";
-import { Users, Plus, Search, Edit, UserX, UserCheck, Shield } from "lucide-react";
+import { Users, Plus, Search, Edit, UserX, UserCheck, Shield, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { TechnicianFormModal } from "@/components/modals/TechnicianFormModal";
 import { ImportExportButtons } from "@/components/ui/ImportExportButtons";
@@ -72,6 +72,16 @@ export default function TechniciansPage() {
       fetchTechnicians();
     } catch (error) {
       console.error("Failed to update status:", error);
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Are you sure you want to delete this technician? This will permanently remove the technician and their associated user account, IMEI restrictions, and verification logs.")) return;
+    try {
+      await technicianApi.delete(id);
+      fetchTechnicians();
+    } catch (error) {
+      console.error("Failed to delete technician:", error);
     }
   };
 
@@ -181,6 +191,14 @@ export default function TechniciansPage() {
                                 ) : (
                                   <UserCheck className="h-4 w-4 text-green-600" />
                                 )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => handleDelete(tech.technicianId)}
+                                title="Delete technician"
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
                           </td>

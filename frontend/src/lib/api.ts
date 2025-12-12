@@ -77,6 +77,7 @@ export const technicianApi = {
   create: (data: CreateTechnicianDto) => api.post("/technicians", data),
   update: (id: number, data: UpdateTechnicianDto) =>
     api.put(`/technicians/${id}`, data),
+  delete: (id: number) => api.delete(`/technicians/${id}`),
   deactivate: (id: number) => api.post(`/technicians/${id}/deactivate`),
   activate: (id: number) => api.post(`/technicians/${id}/activate`),
   getStats: (id: number) => api.get(`/technicians/${id}/stats`),

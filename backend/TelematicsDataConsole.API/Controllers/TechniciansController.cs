@@ -154,6 +154,23 @@ public class TechniciansController : ControllerBase
     }
 
     /// <summary>
+    /// Delete a technician (hard delete - removes technician and associated user completely)
+    /// </summary>
+    [HttpDelete("{id}")]
+    [RequirePermission(Permissions.TechnicianEdit)]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var userId = GetCurrentUserId();
+        var result = await _technicianService.DeleteAsync(id, userId);
+
+        if (!result)
+            return NotFound(new { message = "Technician not found" });
+
+        _logger.LogInformation("Technician deleted: {TechnicianId} by user {UserId}", id, userId);
+        return Ok(new { message = "Technician deleted successfully" });
+    }
+
+    /// <summary>
     /// Get technician statistics
     /// </summary>
     [HttpGet("{id}/stats")]

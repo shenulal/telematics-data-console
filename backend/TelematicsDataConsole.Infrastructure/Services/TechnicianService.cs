@@ -23,6 +23,7 @@ public class TechnicianService : ITechnicianService
         var query = _context.Technicians
             .Include(t => t.User)
             .Include(t => t.Reseller)
+            .Where(t => t.User.Status != (short)UserStatus.Deleted) // Exclude technicians with deleted users
             .AsQueryable();
 
         if (filter.ResellerId.HasValue)
@@ -156,6 +157,53 @@ public class TechnicianService : ITechnicianService
         return (await GetByIdAsync(id))!;
     }
 
+    public async Task<bool> DeleteAsync(int id, int deletedBy)
+    {
+        var technician = await _context.Technicians
+            .Include(t => t.User)
+                .ThenInclude(u => u.UserRoles)
+            .FirstOrDefaultAsync(t => t.TechnicianId == id);
+        if (technician == null) return false;
+
+        var oldValues = new { technician.TechnicianId, technician.UserId, technician.User?.Username, technician.User?.Email };
+
+        // Delete IMEI restrictions for this technician
+        var restrictions = await _context.ImeiRestrictions
+            .Where(r => r.TechnicianId == id)
+            .ToListAsync();
+        if (restrictions.Any())
+        {
+            _context.ImeiRestrictions.RemoveRange(restrictions);
+        }
+
+        // Delete verification logs for this technician
+        var verificationLogs = await _context.VerificationLogs
+            .Where(v => v.TechnicianId == id)
+            .ToListAsync();
+        if (verificationLogs.Any())
+        {
+            _context.VerificationLogs.RemoveRange(verificationLogs);
+        }
+
+        // Delete the technician record
+        _context.Technicians.Remove(technician);
+
+        // Delete user roles and user record
+        if (technician.User != null)
+        {
+            if (technician.User.UserRoles.Any())
+            {
+                _context.UserRoles.RemoveRange(technician.User.UserRoles);
+            }
+            _context.Users.Remove(technician.User);
+        }
+
+        await _context.SaveChangesAsync();
+
+        await _auditService.LogAsync(deletedBy, AuditActions.Delete, "Technician", id.ToString(), oldValues, null);
+        return true;
+    }
+
     public async Task<bool> DeactivateAsync(int id, int updatedBy) => await UpdateStatusAsync(id, TechnicianStatus.Inactive, updatedBy);
     public async Task<bool> ActivateAsync(int id, int updatedBy) => await UpdateStatusAsync(id, TechnicianStatus.Active, updatedBy);
 
@@ -179,7 +227,7 @@ public class TechnicianService : ITechnicianService
     {
         return await _context.Technicians
             .Include(t => t.User)
-            .Where(t => t.ResellerId == resellerId)
+            .Where(t => t.ResellerId == resellerId && t.User.Status != (short)UserStatus.Deleted)
             .Select(t => MapToDto(t))
             .ToListAsync();
     }
