@@ -141,24 +141,35 @@ export function Header() {
             )}
           </nav>
 
-          {/* User Menu */}
-          <div className="flex items-center gap-4">
-            {/* User Dropdown */}
+          {/* User Menu - Clean "System Administrator" style dropdown */}
+          <div className="flex items-center gap-2">
+            {/* User Dropdown with role as title */}
             <div className="relative" ref={userDropdownRef}>
               <button
                 onClick={() => setUserDropdown(!userDropdown)}
-                className="hidden sm:flex items-center gap-2 text-sm text-gray-300 hover:text-white px-3 py-2 rounded-md hover:bg-slate-800"
+                className="hidden sm:flex items-center gap-2 text-sm px-3 py-2 rounded-md hover:bg-slate-800 border border-slate-700"
               >
-                <User className="h-4 w-4" />
-                <span>{user?.fullName || user?.username}</span>
-                <span className="text-xs bg-blue-600 px-2 py-0.5 rounded">
+                <User className="h-4 w-4 text-gray-400" />
+                <div className="text-left">
+                  <div className="text-xs text-gray-400">
+                    {user?.roles?.[0] === "SUPERADMIN" ? "System Administrator" :
+                     user?.roles?.[0] === "RESELLER ADMIN" ? "Reseller Admin" :
+                     user?.roles?.[0] === "SUPERVISOR" ? "Supervisor" :
+                     user?.roles?.[0] === "TECHNICIAN" ? "Technician" : user?.roles?.[0]}
+                  </div>
+                </div>
+                <span className="text-xs bg-blue-600 px-2 py-0.5 rounded font-medium">
                   {user?.roles?.[0]}
                 </span>
-                <ChevronDown className="h-4 w-4" />
               </button>
 
               {userDropdown && (
-                <div className="absolute right-0 mt-2 w-48 bg-slate-800 rounded-md shadow-lg py-1 z-50">
+                <div className="absolute right-0 mt-2 w-56 bg-slate-800 rounded-md shadow-lg py-1 z-50 border border-slate-700">
+                  {/* User Info */}
+                  <div className="px-4 py-3 border-b border-slate-700">
+                    <p className="text-sm font-medium text-white">{user?.fullName || user?.username}</p>
+                    <p className="text-xs text-gray-400">{user?.email || user?.username}</p>
+                  </div>
                   <button
                     onClick={() => {
                       setChangePasswordOpen(true);
