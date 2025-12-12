@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Header } from "@/components/layout/Header";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { useEffect, useState, useCallback } from "react";
 import { auditApi } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
-import { FileText, Search, ChevronLeft, ChevronRight, Download, RefreshCw } from "lucide-react";
+import { FileText, Search, ChevronLeft, ChevronRight, Download, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 
 interface AuditLog {
   auditId: number;
@@ -23,6 +24,106 @@ interface AuditLog {
   ipAddress?: string;
   createdAt: string;
 }
+
+// Helper to parse JSON safely
+const parseJson = (str?: string): Record<string, unknown> | null => {
+  if (!str) return null;
+  try {
+    return JSON.parse(str);
+  } catch {
+    return null;
+  }
+};
+
+// Get meaningful entity description from entity type and values
+const getEntityDescription = (log: AuditLog): string => {
+  const oldData = parseJson(log.oldValues);
+  const newData = parseJson(log.newValues);
+  const data = newData || oldData;
+
+  switch (log.entityType) {
+    case "User":
+      // For login attempts, entityId might contain username
+      if (log.action.includes("LOGIN") && log.entityId && !log.entityId.match(/^\d+$/)) {
+        return `User: ${log.entityId}`;
+      }
+      if (data) {
+        const username = data.Username || data.username;
+        const email = data.Email || data.email;
+        if (username) return `User: ${username}`;
+        if (email) return `User: ${email}`;
+      }
+      return log.entityId ? `User #${log.entityId}` : "User";
+
+    case "Technician":
+      if (data) {
+        const name = data.TechnicianName || data.technicianName || data.Username || data.username;
+        const empCode = data.EmployeeCode || data.employeeCode;
+        if (name) return `Technician: ${name}${empCode ? ` (${empCode})` : ""}`;
+      }
+      return log.entityId ? `Technician #${log.entityId}` : "Technician";
+
+    case "Reseller":
+      if (data) {
+        const name = data.CompanyName || data.companyName || data.DisplayName || data.displayName;
+        if (name) return `Reseller: ${name}`;
+      }
+      return log.entityId ? `Reseller #${log.entityId}` : "Reseller";
+
+    case "ImeiRestriction":
+      if (data) {
+        const imei = data.Imei || data.imei;
+        const accessType = data.AccessType ?? data.accessType;
+        const accessLabel = accessType === 0 ? "Deny" : accessType === 1 ? "Allow" : "";
+        if (imei) return `IMEI Restriction: ${imei}${accessLabel ? ` (${accessLabel})` : ""}`;
+      }
+      return log.entityId ? `IMEI Restriction #${log.entityId}` : "IMEI Restriction";
+
+    case "Tag":
+      if (data) {
+        const name = data.TagName || data.tagName;
+        if (name) return `Tag: ${name}`;
+      }
+      return log.entityId ? `Tag #${log.entityId}` : "Tag";
+
+    case "Role":
+      if (data) {
+        const name = data.RoleName || data.roleName;
+        if (name) return `Role: ${name}`;
+      }
+      return log.entityId ? `Role #${log.entityId}` : "Role";
+
+    case "IMEI":
+      return log.entityId ? `IMEI: ${log.entityId}` : "IMEI";
+
+    case "VerificationLog":
+      if (data) {
+        const imei = data.Imei || data.imei;
+        if (imei) return `Verification: ${imei}`;
+      }
+      return log.entityId ? `Verification #${log.entityId}` : "Verification";
+
+    default:
+      return log.entityId ? `${log.entityType} #${log.entityId}` : log.entityType;
+  }
+};
+
+// Format a value for display
+const formatValue = (value: unknown): string => {
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+};
+
+// Get human-readable field name
+const formatFieldName = (key: string): string => {
+  // Convert camelCase or PascalCase to Title Case with spaces
+  return key
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+    .replace(/^./, (str) => str.toUpperCase());
+};
 
 interface AuditUser {
   userId: number;
@@ -47,6 +148,9 @@ export default function AuditPage() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
 
+  // Expanded rows state
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+
   // Filter states
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -57,6 +161,18 @@ export default function AuditPage() {
   // Filter options from API
   const [actions, setActions] = useState<string[]>([]);
   const [users, setUsers] = useState<AuditUser[]>([]);
+
+  const toggleRow = (auditId: number) => {
+    setExpandedRows((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(auditId)) {
+        newSet.delete(auditId);
+      } else {
+        newSet.add(auditId);
+      }
+      return newSet;
+    });
+  };
 
   // Load filter options on mount
   useEffect(() => {
@@ -126,7 +242,7 @@ export default function AuditPage() {
       });
 
       const data = response.data.items || [];
-      const headers = ["Time", "User", "Action", "Entity Type", "Entity ID", "IP Address"];
+      const headers = ["Time", "User", "Action", "Entity", "IP Address", "Old Values", "New Values"];
       const csvRows = [headers.join(",")];
 
       data.forEach((log: AuditLog) => {
@@ -134,11 +250,12 @@ export default function AuditPage() {
           log.createdAt ? new Date(log.createdAt).toLocaleString() : "",
           log.username || "",
           log.action,
-          log.entityType,
-          log.entityId || "",
+          getEntityDescription(log),
           log.ipAddress || "",
+          log.oldValues || "",
+          log.newValues || "",
         ];
-        csvRows.push(row.map((v) => `"${v}"`).join(","));
+        csvRows.push(row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","));
       });
 
       const csvContent = csvRows.join("\n");
@@ -304,6 +421,7 @@ export default function AuditPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50">
                       <tr>
+                        <th className="px-2 py-3 text-left font-medium text-gray-500 w-8"></th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Time</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">User</th>
                         <th className="px-4 py-3 text-left font-medium text-gray-500">Action</th>
@@ -312,24 +430,84 @@ export default function AuditPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {logs?.items.map((log) => (
-                        <tr key={log.auditId} className="hover:bg-gray-50">
-                          <td className="px-4 py-3 text-xs whitespace-nowrap">{formatDate(log.createdAt)}</td>
-                          <td className="px-4 py-3">{log.username || "-"}</td>
-                          <td className="px-4 py-3">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${getActionColor(log.action)}`}>
-                              {log.action}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className="text-gray-600">{log.entityType}</span>
-                            {log.entityId && (
-                              <span className="text-gray-400 ml-1">#{log.entityId}</span>
+                      {logs?.items.map((log) => {
+                        const hasDetails = log.oldValues || log.newValues;
+                        const isExpanded = expandedRows.has(log.auditId);
+                        const oldData = parseJson(log.oldValues);
+                        const newData = parseJson(log.newValues);
+
+                        return (
+                          <React.Fragment key={log.auditId}>
+                            <tr
+                              className={`hover:bg-gray-50 ${hasDetails ? "cursor-pointer" : ""}`}
+                              onClick={() => hasDetails && toggleRow(log.auditId)}
+                            >
+                              <td className="px-2 py-3 text-center">
+                                {hasDetails && (
+                                  <button className="text-gray-400 hover:text-gray-600">
+                                    {isExpanded ? (
+                                      <ChevronUp className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-xs whitespace-nowrap">{formatDate(log.createdAt)}</td>
+                              <td className="px-4 py-3">{log.username || "-"}</td>
+                              <td className="px-4 py-3">
+                                <span className={`px-2 py-1 rounded text-xs font-medium ${getActionColor(log.action)}`}>
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span className="text-gray-700">{getEntityDescription(log)}</span>
+                              </td>
+                              <td className="px-4 py-3 font-mono text-xs">{log.ipAddress || "-"}</td>
+                            </tr>
+                            {isExpanded && hasDetails && (
+                              <tr className="bg-gray-50">
+                                <td colSpan={6} className="px-4 py-4">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Old Values */}
+                                    {oldData && Object.keys(oldData).length > 0 && (
+                                      <div className="bg-red-50 rounded-lg p-4 border border-red-100">
+                                        <h4 className="font-medium text-red-800 mb-2 text-sm">Previous Values</h4>
+                                        <dl className="space-y-1">
+                                          {Object.entries(oldData).map(([key, value]) => (
+                                            <div key={key} className="flex text-sm">
+                                              <dt className="text-red-600 font-medium w-32 flex-shrink-0">{formatFieldName(key)}:</dt>
+                                              <dd className="text-red-700">{formatValue(value)}</dd>
+                                            </div>
+                                          ))}
+                                        </dl>
+                                      </div>
+                                    )}
+                                    {/* New Values */}
+                                    {newData && Object.keys(newData).length > 0 && (
+                                      <div className="bg-green-50 rounded-lg p-4 border border-green-100">
+                                        <h4 className="font-medium text-green-800 mb-2 text-sm">New Values</h4>
+                                        <dl className="space-y-1">
+                                          {Object.entries(newData).map(([key, value]) => (
+                                            <div key={key} className="flex text-sm">
+                                              <dt className="text-green-600 font-medium w-32 flex-shrink-0">{formatFieldName(key)}:</dt>
+                                              <dd className="text-green-700">{formatValue(value)}</dd>
+                                            </div>
+                                          ))}
+                                        </dl>
+                                      </div>
+                                    )}
+                                    {/* If only one set of values, show single column */}
+                                    {!oldData && !newData && (
+                                      <div className="text-gray-500 text-sm">No detailed information available</div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
                             )}
-                          </td>
-                          <td className="px-4 py-3 font-mono text-xs">{log.ipAddress || "-"}</td>
-                        </tr>
-                      ))}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
