@@ -20,6 +20,7 @@ public class VerificationLogService : IVerificationLogService
     {
         var query = _context.VerificationLogs
             .Include(v => v.Technician).ThenInclude(t => t.User)
+            .Include(v => v.Technician).ThenInclude(t => t.Reseller)
             .AsQueryable();
 
         if (filter.TechnicianId.HasValue)
@@ -27,6 +28,18 @@ public class VerificationLogService : IVerificationLogService
 
         if (filter.DeviceId.HasValue)
             query = query.Where(v => v.DeviceId == filter.DeviceId.Value);
+
+        if (filter.ResellerId.HasValue)
+            query = query.Where(v => v.Technician.ResellerId == filter.ResellerId.Value);
+
+        if (!string.IsNullOrWhiteSpace(filter.TechnicianName))
+            query = query.Where(v =>
+                (v.Technician.User.FullName != null && v.Technician.User.FullName.Contains(filter.TechnicianName)) ||
+                v.Technician.User.Username.Contains(filter.TechnicianName) ||
+                (v.Technician.EmployeeCode != null && v.Technician.EmployeeCode.Contains(filter.TechnicianName)));
+
+        if (!string.IsNullOrWhiteSpace(filter.Imei))
+            query = query.Where(v => v.Imei != null && v.Imei.Contains(filter.Imei));
 
         if (filter.FromDate.HasValue)
             query = query.Where(v => v.VerifiedAt >= filter.FromDate.Value);
@@ -45,7 +58,16 @@ public class VerificationLogService : IVerificationLogService
                 VerificationId = v.VerificationId,
                 TechnicianId = v.TechnicianId,
                 TechnicianName = v.Technician.User.FullName ?? v.Technician.User.Username,
+                TechnicianEmployeeCode = v.Technician.EmployeeCode,
+                ResellerId = v.Technician.ResellerId,
+                ResellerName = v.Technician.Reseller != null ? v.Technician.Reseller.CompanyName : null,
                 DeviceId = v.DeviceId,
+                Imei = v.Imei,
+                VerificationStatus = v.VerificationStatus,
+                Notes = v.Notes,
+                Latitude = v.Latitude,
+                Longitude = v.Longitude,
+                GpsTime = v.GpsTime,
                 VerifiedAt = v.VerifiedAt
             })
             .ToListAsync();
@@ -63,13 +85,23 @@ public class VerificationLogService : IVerificationLogService
     {
         return await _context.VerificationLogs
             .Include(v => v.Technician).ThenInclude(t => t.User)
+            .Include(v => v.Technician).ThenInclude(t => t.Reseller)
             .Where(v => v.VerificationId == id)
             .Select(v => new VerificationLogDto
             {
                 VerificationId = v.VerificationId,
                 TechnicianId = v.TechnicianId,
                 TechnicianName = v.Technician.User.FullName ?? v.Technician.User.Username,
+                TechnicianEmployeeCode = v.Technician.EmployeeCode,
+                ResellerId = v.Technician.ResellerId,
+                ResellerName = v.Technician.Reseller != null ? v.Technician.Reseller.CompanyName : null,
                 DeviceId = v.DeviceId,
+                Imei = v.Imei,
+                VerificationStatus = v.VerificationStatus,
+                Notes = v.Notes,
+                Latitude = v.Latitude,
+                Longitude = v.Longitude,
+                GpsTime = v.GpsTime,
                 VerifiedAt = v.VerifiedAt
             })
             .FirstOrDefaultAsync();
@@ -114,6 +146,7 @@ public class VerificationLogService : IVerificationLogService
     {
         return await _context.VerificationLogs
             .Include(v => v.Technician).ThenInclude(t => t.User)
+            .Include(v => v.Technician).ThenInclude(t => t.Reseller)
             .Where(v => v.TechnicianId == technicianId)
             .OrderByDescending(v => v.VerifiedAt)
             .Take(limit)
@@ -122,7 +155,16 @@ public class VerificationLogService : IVerificationLogService
                 VerificationId = v.VerificationId,
                 TechnicianId = v.TechnicianId,
                 TechnicianName = v.Technician.User.FullName ?? v.Technician.User.Username,
+                TechnicianEmployeeCode = v.Technician.EmployeeCode,
+                ResellerId = v.Technician.ResellerId,
+                ResellerName = v.Technician.Reseller != null ? v.Technician.Reseller.CompanyName : null,
                 DeviceId = v.DeviceId,
+                Imei = v.Imei,
+                VerificationStatus = v.VerificationStatus,
+                Notes = v.Notes,
+                Latitude = v.Latitude,
+                Longitude = v.Longitude,
+                GpsTime = v.GpsTime,
                 VerifiedAt = v.VerifiedAt
             })
             .ToListAsync();
@@ -132,6 +174,7 @@ public class VerificationLogService : IVerificationLogService
     {
         return await _context.VerificationLogs
             .Include(v => v.Technician).ThenInclude(t => t.User)
+            .Include(v => v.Technician).ThenInclude(t => t.Reseller)
             .Where(v => v.DeviceId == deviceId)
             .OrderByDescending(v => v.VerifiedAt)
             .Take(limit)
@@ -140,7 +183,16 @@ public class VerificationLogService : IVerificationLogService
                 VerificationId = v.VerificationId,
                 TechnicianId = v.TechnicianId,
                 TechnicianName = v.Technician.User.FullName ?? v.Technician.User.Username,
+                TechnicianEmployeeCode = v.Technician.EmployeeCode,
+                ResellerId = v.Technician.ResellerId,
+                ResellerName = v.Technician.Reseller != null ? v.Technician.Reseller.CompanyName : null,
                 DeviceId = v.DeviceId,
+                Imei = v.Imei,
+                VerificationStatus = v.VerificationStatus,
+                Notes = v.Notes,
+                Latitude = v.Latitude,
+                Longitude = v.Longitude,
+                GpsTime = v.GpsTime,
                 VerifiedAt = v.VerifiedAt
             })
             .ToListAsync();

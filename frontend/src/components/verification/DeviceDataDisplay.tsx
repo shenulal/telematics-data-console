@@ -397,9 +397,14 @@ export function DeviceDataDisplay() {
     <div className="space-y-4 max-w-3xl mx-auto px-4 sm:px-0">
       {/* Top Action Bar */}
       <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-        <Button variant="ghost" onClick={handleNewVerification} size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Search
-        </Button>
+        {/* Back to Search - Only for Super Admin and Reseller Admin */}
+        {(isSuperAdmin || isResellerAdmin) ? (
+          <Button variant="ghost" onClick={handleNewVerification} size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Search
+          </Button>
+        ) : (
+          <div /> /* Empty div to maintain layout */
+        )}
         <div className="flex gap-2">
           <Button
             onClick={handleRefresh}

@@ -45,6 +45,7 @@ export function Header() {
     { href: "/admin/roles", label: "Roles" },
     { href: "/admin/tags", label: "Tags" },
     { href: "/admin/audit", label: "Audit Logs" },
+    { href: "/admin/verification-logs", label: "Verification Logs" },
   ];
 
   return (
@@ -91,6 +92,9 @@ export function Header() {
                 <Link href="/admin/audit" className="text-gray-300 hover:text-white hover:bg-slate-800 px-3 py-2 rounded-md text-sm">
                   Audit Logs
                 </Link>
+                <Link href="/admin/verification-logs" className="text-gray-300 hover:text-white hover:bg-slate-800 px-3 py-2 rounded-md text-sm">
+                  Verification Logs
+                </Link>
               </>
             )}
             {isResellerAdmin(user?.roles) && !isSuperAdmin(user?.roles) && (
@@ -109,6 +113,9 @@ export function Header() {
                 </Link>
                 <Link href="/admin/tags" className="text-gray-300 hover:text-white hover:bg-slate-800 px-3 py-2 rounded-md text-sm">
                   Tags
+                </Link>
+                <Link href="/admin/verification-logs" className="text-gray-300 hover:text-white hover:bg-slate-800 px-3 py-2 rounded-md text-sm">
+                  Verification Logs
                 </Link>
               </>
             )}

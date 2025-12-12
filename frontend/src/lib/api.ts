@@ -125,6 +125,18 @@ export const auditApi = {
   getUsers: () => api.get("/audit/users"),
 };
 
+// Verification Logs API (for Super Admin and Reseller Admin)
+export const verificationLogApi = {
+  getAll: (params?: VerificationLogFilter) => api.get("/verificationlogs", { params }),
+  getById: (id: number) => api.get(`/verificationlogs/${id}`),
+  getByTechnician: (technicianId: number, limit?: number) =>
+    api.get(`/verificationlogs/technician/${technicianId}`, { params: { limit } }),
+  getByDevice: (deviceId: number, limit?: number) =>
+    api.get(`/verificationlogs/device/${deviceId}`, { params: { limit } }),
+  getStatistics: (technicianId?: number, fromDate?: string, toDate?: string) =>
+    api.get("/verificationlogs/statistics", { params: { technicianId, fromDate, toDate } }),
+};
+
 // Users API
 export const userApi = {
   getAll: (params?: UserFilter) => api.get("/users", { params }),
@@ -526,4 +538,43 @@ export interface ExternalDevice {
   countryCode?: string;
   typeId?: number;
   server?: string;
+}
+
+// Verification Log Types
+export interface VerificationLogFilter {
+  technicianId?: number;
+  deviceId?: number;
+  resellerId?: number;
+  technicianName?: string;
+  imei?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface VerificationLogDto {
+  verificationId: number;
+  technicianId: number;
+  technicianName?: string;
+  technicianEmployeeCode?: string;
+  resellerId?: number;
+  resellerName?: string;
+  deviceId: number;
+  imei?: string;
+  verificationStatus?: string;
+  notes?: string;
+  latitude?: number;
+  longitude?: number;
+  gpsTime?: string;
+  verifiedAt: string;
+}
+
+export interface VerificationStatisticsDto {
+  totalVerifications: number;
+  uniqueDevices: number;
+  verificationsToday: number;
+  verificationsThisWeek: number;
+  verificationsThisMonth: number;
+  lastVerificationAt?: string;
 }
